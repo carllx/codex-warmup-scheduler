@@ -1,50 +1,25 @@
-﻿# Execute-CodexWarmup.ps1
-# Performs minimal ephemeral Codex exec request using resolved runtime with bounded execution
+# Execute-CodexWarmup.ps1
+# Thin CLI wrapper for Invoke-CodexWarmup from CodexWarmup.psm1
 
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory=$false)]
     [string]$CodexExe,
+
+    [Parameter(Mandatory=$false)]
     [string]$Model = "gpt-5.6-luna",
+
+    [Parameter(Mandatory=$false)]
     [string]$Prompt = "Reply only: Ready",
+
+    [Parameter(Mandatory=$false)]
     [string]$WorkspaceDir = "$env:LOCALAPPDATA\CodexWarmupV2\workspace",
+
+    [Parameter(Mandatory=$false)]
     [int]$TimeoutSeconds = 45
 )
 
-$ErrorActionPreference = "Stop"
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $scriptDir) { $scriptDir = $PSScriptRoot }
+$modulePath = Join-Path $PSScriptRoot "CodexWarmup.psm1"
+Import-Module $modulePath -Force
 
-if (-not $CodexExe -or -not (Test-Path $CodexExe)) {
-    . (Join-Path $scriptDir "Resolve-CodexRuntime.ps1")
-    $resolved = Resolve-CodexExecutable
-    if (-not $resolved.validated) {
-        throw "Cannot execute warmup: Codex runtime could not be resolved."
-    }
-    $CodexExe = $resolved.path
-}
-
-if (-not (Test-Path $WorkspaceDir)) {
-    New-Item -ItemType Directory -Force -Path $WorkspaceDir | Out-Null
-}
-
-$runnerModule = Join-Path $scriptDir "ProcessRunner.psm1"
-Import-Module $runnerModule -Force
-
-$args = "exec --ephemeral --skip-git-repo-check -s read-only -m $Model -C `"$WorkspaceDir`" `"$Prompt`""
-$startTime = Get-Date
-
-$procRes = Invoke-BoundedProcess -FilePath $CodexExe -Arguments $args -TimeoutSeconds $TimeoutSeconds -WorkingDirectory $WorkspaceDir
-
-$endTime = Get-Date
-
-[PSCustomObject]@{
-    StartTime    = $startTime.ToString("o")
-    EndTime      = $endTime.ToString("o")
-    DurationSec  = $procRes.DurationSec
-    Model        = $Model
-    ExitCode     = $procRes.ExitCode
-    Stdout       = $procRes.Stdout
-    Stderr       = $procRes.Stderr
-    TimedOut     = $procRes.TimedOut
-    Success      = ($procRes.Success -and $procRes.Stdout -match "Ready")
-}
+Invoke-CodexWarmup @PSBoundParameters

@@ -1,4 +1,4 @@
-﻿# controller.ps1
+# controller.ps1
 # Codex Warmup V2 Production Runtime Controller
 # Executed by Windows Task Scheduler from %LOCALAPPDATA%\CodexWarmupV2\runtime\
 
@@ -67,6 +67,7 @@ try {
     # Import declaration-only modules (NO dot-sourcing executable wrappers)
     Import-Module (Join-Path $SchedulerDir "ScheduledTrigger.psm1") -Force
     Import-Module (Join-Path $RuntimeDir "ProcessRunner.psm1") -Force
+    Import-Module (Join-Path $RuntimeDir "CodexWarmup.psm1") -Force
 
     # 1. Resolve Codex Executable
     . (Join-Path $RuntimeDir "Resolve-CodexRuntime.ps1")
@@ -218,9 +219,8 @@ try {
             if ($ShadowMode) {
                 Log-Message "[ShadowMode] Simulated Warmup completed. Proceeding to simulated re-probe & reschedule."
             } else {
-                Log-Message "Invoking Execute-CodexWarmup.ps1..."
-                . (Join-Path $RuntimeDir "Execute-CodexWarmup.ps1")
-                $res = Execute-CodexWarmup -CodexExe $runtime.path
+                Log-Message "Invoking Invoke-CodexWarmup..."
+                $res = Invoke-CodexWarmup -CodexExe $runtime.path
                 Log-Message "Warmup completed. ExitCode=$($res.ExitCode), Output=$($res.Stdout)"
                 if (-not $res.Success) {
                     Log-Message "Warmup execution did not return Ready or failed. Scheduling retry in 5 minutes." "ERROR"

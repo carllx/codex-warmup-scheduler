@@ -1,9 +1,16 @@
-﻿# Get-CodexRateLimits.ps1
+# Get-CodexRateLimits.ps1
 # Queries Codex app-server via JSON-RPC stdio to fetch real-time rate limits
 # Bounded execution: deadline-bounded RPC reads, async stderr drain, and process-tree termination on exit/timeout
 
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory=$false)]
+    [string]$CodexExe,
+
+    [Parameter(Mandatory=$false)]
+    [string]$Arguments = "app-server --stdio",
+
+    [Parameter(Mandatory=$false)]
     [int]$RpcTimeoutSeconds = 8
 )
 
@@ -11,16 +18,19 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $scriptDir) { $scriptDir = $PSScriptRoot }
 
-. (Join-Path $scriptDir "Resolve-CodexRuntime.ps1")
-$runtime = Resolve-CodexExecutable
+if (-not $CodexExe) {
+    . (Join-Path $scriptDir "Resolve-CodexRuntime.ps1")
+    $runtime = Resolve-CodexExecutable
 
-if (-not $runtime.validated) {
-    throw "Cannot read rate limits: Codex executable could not be resolved."
+    if (-not $runtime.validated) {
+        throw "Cannot read rate limits: Codex executable could not be resolved."
+    }
+    $CodexExe = $runtime.path
 }
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = $runtime.path
-$psi.Arguments = "app-server --stdio"
+$psi.FileName = $CodexExe
+$psi.Arguments = $Arguments
 $psi.UseShellExecute = $false
 $psi.RedirectStandardInput = $true
 $psi.RedirectStandardOutput = $true
@@ -96,16 +106,15 @@ try {
     } catch {}
 
     # Bounded wait for process exit, kill process tree on timeout
-    $naturalExit = $proc.WaitForExit(2000)
+    $naturalExit = $proc.WaitForExit(1000)
     if (-not $naturalExit) {
-        try {
-            $taskkillPath = "$env:SystemRoot\System32\taskkill.exe"
-            if (Test-Path $taskkillPath) {
-                & $taskkillPath /PID $pidToManage /T /F | Out-Null
-            } else {
-                $proc.Kill()
-            }
-        } catch {}
+        $runnerModule = Join-Path $scriptDir "ProcessRunner.psm1"
+        if (Test-Path $runnerModule) {
+            Import-Module $runnerModule -Force
+            Stop-BoundedProcessTree -ProcessId $pidToManage -Process $proc -TimeoutMs 1500
+        } else {
+            try { $proc.Kill() } catch {}
+        }
         $proc.WaitForExit(1000) | Out-Null
     }
 }

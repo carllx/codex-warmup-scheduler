@@ -36,7 +36,11 @@ $results = @()
 
 foreach ($file in $files) {
     $lines = (Get-Content -Path $file.FullName -Encoding utf8).Count
-    $relPath = [System.IO.Path]::GetRelativePath($RootDirectory, $file.FullName)
+    $relPath = if ($file.FullName.StartsWith($RootDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $file.FullName.Substring($RootDirectory.Length).TrimStart('\', '/')
+    } else {
+        $file.FullName
+    }
     
     $level = "NORMAL (<400 LOC)"
     if ($lines -gt 700) {

@@ -1,4 +1,4 @@
-﻿# update-runtime.ps1
+# update-runtime.ps1
 # Deploys source repository scripts and configs to %LOCALAPPDATA%\CodexWarmupV2\runtime
 
 [CmdletBinding()]
@@ -24,6 +24,7 @@ foreach ($dir in @($RuntimeTarget, $ConfigTarget, $BackupTarget)) {
 $filesToDeploy = @(
     "src\runtime\Resolve-CodexRuntime.ps1",
     "src\runtime\Get-CodexRateLimits.ps1",
+    "src\runtime\CodexWarmup.psm1",
     "src\runtime\Execute-CodexWarmup.ps1",
     "src\runtime\ProcessRunner.psm1",
     "src\runtime\RateLimitClassifier.psm1",

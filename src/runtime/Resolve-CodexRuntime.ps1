@@ -1,4 +1,4 @@
-﻿function Resolve-CodexExecutable {
+function Resolve-CodexExecutable {
     [CmdletBinding()]
     param()
 
@@ -96,11 +96,18 @@ function Test-CodexExecutable {
             try {
                 $taskkillPath = "$env:SystemRoot\System32\taskkill.exe"
                 if (Test-Path $taskkillPath) {
-                    & $taskkillPath /PID $p.Id /T /F | Out-Null
-                } else {
-                    $p.Kill()
+                    $tkPsi = New-Object System.Diagnostics.ProcessStartInfo
+                    $tkPsi.FileName = $taskkillPath
+                    $tkPsi.Arguments = "/PID $($p.Id) /T /F"
+                    $tkPsi.UseShellExecute = $false
+                    $tkPsi.CreateNoWindow = $true
+                    $tk = [System.Diagnostics.Process]::Start($tkPsi)
+                    if ($tk -and -not $tk.WaitForExit(2000)) {
+                        try { $tk.Kill() } catch {}
+                    }
                 }
             } catch {}
+            try { if (-not $p.HasExited) { $p.Kill() } } catch {}
             $p.WaitForExit(1000) | Out-Null
             return $null
         }

@@ -1,4 +1,4 @@
-﻿# test_execution_safety.ps1
+# test_execution_safety.ps1
 # Dedicated safety regressions test suite for S1, S2, H1, H2, H3, H4.
 # Designed to run in both Windows PowerShell 5.1 (Primary) and PowerShell Core (Secondary).
 
@@ -82,6 +82,30 @@ try {
 }
 
 # -----------------------------------------------------------------------------
+# Warmup import/no-execution regression
+# Verify CodexWarmup.psm1 is declaration-only and importing it does NOT execute warmup
+# -----------------------------------------------------------------------------
+try {
+    $warmupModule = Join-Path $RepoRoot "src\runtime\CodexWarmup.psm1"
+
+    $beforeProcesses = Get-Process -Name "codex*" -ErrorAction SilentlyContinue
+
+    Import-Module $warmupModule -Force
+
+    $afterProcesses = Get-Process -Name "codex*" -ErrorAction SilentlyContinue
+
+    $funcAvailable = (Get-Command Invoke-CodexWarmup -ErrorAction SilentlyContinue) -ne $null
+    $aliasAvailable = (Get-Command Execute-CodexWarmup -ErrorAction SilentlyContinue) -ne $null
+    $noSpuriousExecution = ($null -eq $afterProcesses) -or ($beforeProcesses.Count -eq $afterProcesses.Count)
+
+    $importClean = $funcAvailable -and $aliasAvailable -and $noSpuriousExecution
+
+    Report-Result $importClean "WARMUP_IMPORT" "Warmup module import is declaration-only without execution" "Func=$funcAvailable, Alias=$aliasAvailable, NoSpuriousProc=$noSpuriousExecution"
+} catch {
+    Report-Result $false "WARMUP_IMPORT" "Exception occurred" $_
+}
+
+# -----------------------------------------------------------------------------
 # H1: Child Never Exits
 # Must bounded timeout + cleanup owned process tree
 # -----------------------------------------------------------------------------
@@ -129,57 +153,54 @@ try {
 
 # -----------------------------------------------------------------------------
 # H3: RPC Expected Response Never Arrives
-# Must bounded return + child cleanup
+# Production-owned RPC implementation (Get-CodexRateLimits.ps1) with mock app-server
+# Must prove deadline + bounded return + owned child cleanup
 # -----------------------------------------------------------------------------
 try {
-    # Test Get-CodexRateLimits.ps1 bounded RPC behavior against mock uncooperative child
-    # We create a mock script that acts like app-server but responds with silence / hangs
-    $mockScript = "$env:TEMP\mock_silent_app_server.ps1"
-    [System.IO.File]::WriteAllText($mockScript, "Start-Sleep -Seconds 120")
+    $mockScript = Join-Path $env:TEMP "mock_unresponsive_app_server.ps1"
+    $pidFile = Join-Path $env:TEMP "mock_unresponsive_app_server.pid"
+    if (Test-Path $pidFile) { Remove-Item $pidFile -Force -ErrorAction SilentlyContinue }
+
+    # Mock app-server: writes its own PID to $pidFile, outputs non-RPC noise, sleeps
+    $mockContent = @"
+`$pidPath = '$pidFile'
+[System.IO.File]::WriteAllText(`$pidPath, `$PID.ToString())
+[Console]::Out.WriteLine('{"jsonrpc":"2.0","method":"noise"}')
+Start-Sleep -Seconds 120
+"@
+    [System.IO.File]::WriteAllText($mockScript, $mockContent)
 
     $psExe = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh.exe" } else { "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $psExe
-    $psi.Arguments = "-NoProfile -NonInteractive -File `"$mockScript`""
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
+    $rateLimitScript = Join-Path $RepoRoot "src\runtime\Get-CodexRateLimits.ps1"
+    $mockArgs = "-NoProfile -NonInteractive -File `"$mockScript`""
 
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    $pidToTrack = $proc.Id
-
-    # Use the exact deadline reading routine from Get-CodexRateLimits.ps1
-    $reader = $proc.StandardOutput
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-
-    function Read-RpcLineWithDeadline($r, [int]$timeoutMs) {
-        $innerSw = [System.Diagnostics.Stopwatch]::StartNew()
-        $readTask = $null
-        while ($innerSw.ElapsedMilliseconds -lt $timeoutMs) {
-            if ($null -eq $readTask) { $readTask = $r.ReadLineAsync() }
-            $remaining = [Math]::Max(1, $timeoutMs - [int]$innerSw.ElapsedMilliseconds)
-            $finished = $readTask.Wait($remaining)
-            if ($finished) { return $readTask.Result } else { return $null }
-        }
-        return $null
-    }
-
-    $rpcLine = Read-RpcLineWithDeadline $reader 2000
+    $rpcOut = & $rateLimitScript -CodexExe $psExe -Arguments $mockArgs -RpcTimeoutSeconds 2
     $sw.Stop()
 
-    # Clean up child process
-    $taskkillPath = "$env:SystemRoot\System32\taskkill.exe"
-    & $taskkillPath /PID $pidToTrack /T /F | Out-Null
-    $proc.WaitForExit(1000) | Out-Null
-    $childRunning = (Get-Process -Id $pidToTrack -ErrorAction SilentlyContinue) -ne $null
+    $elapsedMs = $sw.ElapsedMilliseconds
+    $boundedTime = ($elapsedMs -ge 1800 -and $elapsedMs -le 9000)
 
-    $boundedRpc = ($null -eq $rpcLine) -and ($sw.ElapsedMilliseconds -ge 1800 -and $sw.ElapsedMilliseconds -le 4000) -and (-not $childRunning)
+    # Verify mock child PID was recorded and is now terminated
+    $childCleanedUp = $false
+    if (Test-Path $pidFile) {
+        $mockPid = [int](Get-Content $pidFile -Raw).Trim()
+        $childRunning = (Get-Process -Id $mockPid -ErrorAction SilentlyContinue) -ne $null
+        $childCleanedUp = (-not $childRunning)
+    }
 
-    Report-Result $boundedRpc "H3" "RPC deadline expiration bounded return and child process cleanup verified" "LineNull=$($null -eq $rpcLine), ChildRunning=$childRunning, ElapsedMs=$($sw.ElapsedMilliseconds)"
+    # Verify production RPC returned empty/null rate limit response
+    $outStr = if ($rpcOut -is [System.Array]) { $rpcOut -join "`n" } else { [string]$rpcOut }
+    $noExpectedResp = ($outStr -notmatch '"account/rateLimits/read"') -and ($outStr -notmatch '"primary"')
+
+    $h3Pass = $boundedTime -and $childCleanedUp -and $noExpectedResp
+
+    Report-Result $h3Pass "H3" "Production RPC deadline expiration bounded return and owned child cleanup verified" "BoundedTime=$boundedTime (ElapsedMs=$elapsedMs), ChildCleanedUp=$childCleanedUp, NoExpectedResp=$noExpectedResp"
 } catch {
     Report-Result $false "H3" "Exception occurred" $_
+} finally {
+    if (Test-Path $mockScript) { Remove-Item $mockScript -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $pidFile) { Remove-Item $pidFile -Force -ErrorAction SilentlyContinue }
 }
 
 # -----------------------------------------------------------------------------
@@ -198,6 +219,45 @@ try {
     Report-Result $h4Pass "H4" "Normal process execution stdout/stderr and exit code verified" "ExitCode=$($res.ExitCode), Stdout=$($res.Stdout), Stderr=$($res.Stderr)"
 } catch {
     Report-Result $false "H4" "Exception occurred" $_
+}
+
+# -----------------------------------------------------------------------------
+# AST: PowerShell Abstract Syntax Tree parse verification
+# All authored .ps1 and .psm1 files must parse without errors
+# -----------------------------------------------------------------------------
+try {
+    $psFiles = Get-ChildItem -Path $RepoRoot -Recurse -Include "*.ps1", "*.psm1" | Where-Object {
+        $_.FullName -notmatch '\\(\.git|logs|state|backup)\\'
+    }
+
+    $astErrors = @()
+    foreach ($f in $psFiles) {
+        $tokens = $null
+        $errors = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errors)
+        if ($errors -and $errors.Count -gt 0) {
+            $astErrors += "$($f.Name): $($errors[0].Message)"
+        }
+    }
+
+    $astPass = ($astErrors.Count -eq 0)
+    Report-Result $astPass "AST" "All PowerShell scripts and modules parsed cleanly via AST" "Errors=$($astErrors -join '; ')"
+} catch {
+    Report-Result $false "AST" "Exception occurred during AST validation" $_
+}
+
+# -----------------------------------------------------------------------------
+# Code Size: All authored files within acceptable threshold
+# -----------------------------------------------------------------------------
+try {
+    $sizeScript = Join-Path $RepoRoot "scripts\check-code-size.ps1"
+    $sizeOut = & $sizeScript -RootDirectory $RepoRoot
+    $ceilingViolation = $sizeOut | Where-Object { $_ -match "EXCEEDS_CEILING" -or $_ -match "WARNING_INSPECT_SEAMS" }
+    $codeSizePass = ($ceilingViolation.Count -eq 0)
+
+    Report-Result $codeSizePass "CODE_SIZE" "All authored files within acceptable code size limits" ""
+} catch {
+    Report-Result $false "CODE_SIZE" "Exception occurred during code size check" $_
 }
 
 Write-Host "================================================================"
