@@ -11,6 +11,7 @@ $failCount = 0
 function Report-Result([bool]$pass, [string]$testId, [string]$desc, [string]$details = "") {
     if ($pass) {
         Write-Host "[$testId] PASS: $desc" -ForegroundColor Green
+        if ($details) { Write-Host "  -> Details: $details" -ForegroundColor Cyan }
         $global:passCount++
     } else {
         Write-Host "[$testId] FAIL: $desc. $details" -ForegroundColor Red
@@ -109,21 +110,49 @@ try {
 # H1: Child Never Exits
 # Must bounded timeout + cleanup owned process tree
 # -----------------------------------------------------------------------------
+$h1MockScript = Join-Path $env:TEMP "mock_hanging_child.ps1"
+$h1PidFile = Join-Path $env:TEMP "mock_hanging_child.pid"
+if (Test-Path $h1PidFile) { Remove-Item $h1PidFile -Force -ErrorAction SilentlyContinue }
+
 try {
     $procModule = Join-Path $RepoRoot "src\runtime\ProcessRunner.psm1"
     Import-Module $procModule -Force
 
+    $mockScriptContent = @"
+`$pidPath = '$h1PidFile'
+[System.IO.File]::WriteAllText(`$pidPath, `$PID.ToString())
+Start-Sleep -Seconds 120
+"@
+    [System.IO.File]::WriteAllText($h1MockScript, $mockScriptContent)
+
     $psExe = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh.exe" } else { "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
+    $mockArgs = "-NoProfile -NonInteractive -File `"$h1MockScript`""
+
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $res = Invoke-BoundedProcess -FilePath $psExe -Arguments "-NoProfile -NonInteractive -Command Start-Sleep -Seconds 120" -TimeoutSeconds 2
+    $res = Invoke-BoundedProcess -FilePath $psExe -Arguments $mockArgs -TimeoutSeconds 2
     $sw.Stop()
 
-    $boundedTime = ($sw.ElapsedMilliseconds -ge 1800 -and $sw.ElapsedMilliseconds -le 7000)
+    $elapsedMs = $sw.ElapsedMilliseconds
+    $boundedTime = ($elapsedMs -ge 1800 -and $elapsedMs -le 7000)
     $cleanOutcome = ($res.TimedOut -eq $true -and $res.Success -eq $false)
 
-    Report-Result ($boundedTime -and $cleanOutcome) "H1" "Hanging child process bounded by timeout and cleaned up" "ElapsedMs=$($sw.ElapsedMilliseconds), TimedOut=$($res.TimedOut)"
+    $pidObtained = (Test-Path $h1PidFile)
+    $childPid = if ($pidObtained) { [int](Get-Content $h1PidFile -Raw).Trim() } else { 0 }
+    $childRunning = if ($childPid -gt 0) {
+        (Get-Process -Id $childPid -ErrorAction SilentlyContinue) -ne $null
+    } else {
+        $true
+    }
+    $childCleanedUp = ($pidObtained -and -not $childRunning)
+
+    $h1Pass = ($boundedTime -and $cleanOutcome -and $childCleanedUp)
+
+    Report-Result $h1Pass "H1" "Hanging child process bounded by timeout and cleaned up" "ElapsedMs=$elapsedMs, TimedOut=$($res.TimedOut), ChildPid=$childPid, ChildExistsAfterReturn=$childRunning"
 } catch {
     Report-Result $false "H1" "Exception occurred" $_
+} finally {
+    if (Test-Path $h1MockScript) { Remove-Item $h1MockScript -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $h1PidFile) { Remove-Item $h1PidFile -Force -ErrorAction SilentlyContinue }
 }
 
 # -----------------------------------------------------------------------------
