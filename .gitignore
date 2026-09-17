@@ -1,0 +1,28 @@
+﻿# Git Ignore for codex-warmup-scheduler
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.class
+.pytest_cache/
+
+# Local production state and logs
+logs/
+*.log
+state/
+*.state.json
+
+# Local configurations / secrets
+*.local.json
+.env
+
+# Backups
+backup/
+*.bak
+
+# OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.BIN/
+.DS_Store

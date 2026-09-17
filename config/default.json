@@ -1,0 +1,60 @@
+{
+  "planning": {
+    "gridStepMinutes": 15,
+    "horizonHours": 24,
+    "windowDurationMin": 300
+  },
+  "weights": {
+    "minimumUsefulScore": 30.0,
+    "sleepDisruptionThird": 100.0,
+    "boundaryAlignment": 1.2,
+    "sleepDisruptionSecond": 40.0,
+    "sleepDisruptionBase": 10.0,
+    "wakeBenefit": 1.0,
+    "redundantPenalty": 1000.0,
+    "workCoverage": 0.8,
+    "warmupCost": 5.0
+  },
+  "userValueWeights": [
+    {
+      "end": "08:00",
+      "weight": 0.0,
+      "start": "01:30"
+    },
+    {
+      "end": "09:00",
+      "weight": 0.3,
+      "start": "08:00"
+    },
+    {
+      "end": "12:30",
+      "weight": 1.0,
+      "start": "09:00"
+    },
+    {
+      "end": "14:00",
+      "weight": 0.2,
+      "start": "12:30"
+    },
+    {
+      "end": "19:00",
+      "weight": 1.0,
+      "start": "14:00"
+    },
+    {
+      "end": "20:00",
+      "weight": 0.4,
+      "start": "19:00"
+    },
+    {
+      "end": "23:00",
+      "weight": 0.7,
+      "start": "20:00"
+    },
+    {
+      "end": "01:30",
+      "weight": 0.2,
+      "start": "23:00"
+    }
+  ]
+}

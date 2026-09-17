@@ -1,0 +1,337 @@
+{
+  "Scenario 3 - User Wakes Up Later (11:00)": {
+    "description": "Primary work start shifted to 11:00",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-17T21:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "02:00",
+          "10:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "11:00",
+            "15:00"
+          ],
+          [
+            "16:00",
+            "20:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "11:00"
+      }
+    }
+  },
+  "Scenario 1 - Normal Morning Alignment": {
+    "description": "21:00 previous day, expected work 09:00, wakeToRun=true",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-17T21:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ],
+          [
+            "20:00",
+            "23:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  },
+  "Scenario 4 - User Starts Work Early at 07:00": {
+    "description": "User wakes early at 07:00, user is active",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T07:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "07:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "07:00",
+            "12:00"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "07:00"
+      }
+    }
+  },
+  "Scenario 10 - Night Wake Low Benefit (Work Starts at 15:00)": {
+    "description": "Expected work start is 15:00 afternoon, early 04:00 wake gives low value",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-17T21:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "15:00",
+            "20:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "15:00"
+      }
+    }
+  },
+  "Scenario 8 - Weekly Quota Blocked": {
+    "description": "Weekly quota exhausted",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T08:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": true,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  },
+  "Scenario 9 - Rest Day with No Expected Work": {
+    "description": "Rest day, no work windows, work weights 0",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T08:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "09:00"
+        ],
+        "expectedWorkWindows": [],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": null
+      }
+    }
+  },
+  "Scenario 7 - Inside Active Window at 10:00 (resetAt 13:30)": {
+    "description": "Now=10:00, active window until 13:30, no warmup inside active",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T10:00:00+08:00",
+      "quota": {
+        "resetAt": "2026-09-18T13:30:00+08:00",
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "ACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  },
+  "Scenario 6 - External Usage on Mac Opened Window Until 11:00": {
+    "description": "Active window until 11:00 detected",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T07:30:00+08:00",
+      "quota": {
+        "resetAt": "2026-09-18T11:00:00+08:00",
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "ACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  },
+  "Scenario 5 - PC Off and Missed 04:00, Boots at 07:30": {
+    "description": "Boot at 07:30, expected work 09:00, replan from 07:30",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": true,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-18T07:30:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  },
+  "Scenario 2 - WakeToRun Disabled": {
+    "description": "Same as Scenario 1 but WakeToRun=false",
+    "state": {
+      "device": {
+        "wakeToRunAvailable": false,
+        "state": "AWAKE"
+      },
+      "now": "2026-09-17T21:00:00+08:00",
+      "quota": {
+        "resetAt": null,
+        "weeklyBlocked": false,
+        "fiveHourWindowStatus": "INACTIVE",
+        "windowDurationMinutes": 300
+      },
+      "userProfile": {
+        "sleepWindows": [
+          "01:30",
+          "08:00"
+        ],
+        "expectedWorkWindows": [
+          [
+            "09:00",
+            "12:30"
+          ],
+          [
+            "14:00",
+            "19:00"
+          ],
+          [
+            "20:00",
+            "23:00"
+          ]
+        ],
+        "timezone": "Asia/Shanghai",
+        "expectedPrimaryWorkStart": "09:00"
+      }
+    }
+  }
+}
