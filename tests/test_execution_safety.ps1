@@ -251,6 +251,34 @@ try {
 }
 
 # -----------------------------------------------------------------------------
+# R6: Resolver Script Root Determination under Caller Context & Stop Preference
+# -----------------------------------------------------------------------------
+try {
+    . (Join-Path $RepoRoot "src\runtime\Resolve-CodexRuntime.ps1")
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    $safeExe = if ($pythonCmd -and (Test-Path $pythonCmd.Source)) { $pythonCmd.Source } else { $null }
+    if (-not $safeExe) {
+        $commonPython = "C:\ProgramData\anaconda3\python.exe"
+        if (Test-Path $commonPython) { $safeExe = $commonPython }
+    }
+
+    if ($safeExe) {
+        function Invoke-TestCallerContext {
+            param([string]$targetExe)
+            return Test-CodexExecutable -FilePath $targetExe
+        }
+
+        $verOut = Invoke-TestCallerContext -targetExe $safeExe
+        $r6Pass = ($null -ne $verOut) -and ($verOut.Length -gt 0) -and ($verOut -match "Python|codex-cli")
+        Report-Result $r6Pass "R6" "Resolver script root determination in caller context under Stop preference verified" "VersionOutput=$verOut"
+    } else {
+        Report-Result $false "R6" "Safe executable for version probe not found"
+    }
+} catch {
+    Report-Result $false "R6" "Exception occurred" $_
+}
+
+# -----------------------------------------------------------------------------
 # AST: PowerShell Abstract Syntax Tree parse verification
 # All authored .ps1 and .psm1 files must parse without errors
 # -----------------------------------------------------------------------------

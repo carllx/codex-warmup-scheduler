@@ -1,3 +1,9 @@
+# Capture resolver script root at script load time
+$script:CodexRuntimeResolverRoot = $PSScriptRoot
+if (-not $script:CodexRuntimeResolverRoot -and $MyInvocation.MyCommand.Path) {
+    $script:CodexRuntimeResolverRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
 function Resolve-CodexExecutable {
     [CmdletBinding()]
     param()
@@ -68,8 +74,9 @@ function Test-CodexExecutable {
     param([string]$FilePath)
     if (-not (Test-Path $FilePath)) { return $null }
     try {
-        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        $scriptDir = $script:CodexRuntimeResolverRoot
         if (-not $scriptDir) { $scriptDir = $PSScriptRoot }
+        if (-not $scriptDir) { return $null }
         $runnerModule = Join-Path $scriptDir "ProcessRunner.psm1"
         if (Test-Path $runnerModule) {
             Import-Module $runnerModule -Force
