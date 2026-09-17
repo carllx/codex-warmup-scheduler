@@ -24,7 +24,8 @@ try {
         exit 0
     }
 } catch {
-    Write-Warning "Failed to initialize or acquire named mutex '$mutexName': $_"
+    Write-Host "[$([DateTime]::Now.ToString('o'))][ERROR] Failed to initialize or acquire named mutex '$mutexName': $_. Exiting fail-closed."
+    exit 1
 }
 
 try {
