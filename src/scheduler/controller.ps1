@@ -1,4 +1,4 @@
-# controller.ps1
+﻿# controller.ps1
 # Codex Warmup V2 Production Runtime Controller
 # Executed by Windows Task Scheduler from %LOCALAPPDATA%\CodexWarmupV2\runtime\
 
@@ -64,6 +64,10 @@ try {
     Log-Message "=== Codex Warmup V2 Controller Started ==="
     Log-Message "Execution Mode: ShadowMode=$($ShadowMode.IsPresent), DryRun=$($DryRun.IsPresent)"
 
+    # Import declaration-only modules (NO dot-sourcing executable wrappers)
+    Import-Module (Join-Path $SchedulerDir "ScheduledTrigger.psm1") -Force
+    Import-Module (Join-Path $RuntimeDir "ProcessRunner.psm1") -Force
+
     # 1. Resolve Codex Executable
     . (Join-Path $RuntimeDir "Resolve-CodexRuntime.ps1")
     $runtime = Resolve-CodexExecutable
@@ -124,7 +128,6 @@ try {
     $quota = Get-ClassifiedQuotaState -CacheFile $ProbeCacheFile
     if (-not $quota -or -not $quota.Classification) {
         Log-Message "Rate limits query failed or unparseable. Fail-Closed: scheduling safety probe in 30 minutes." "WARN"
-        . (Join-Path $SchedulerDir "Update-ScheduledTrigger.ps1")
         Update-ScheduledTrigger -TargetDateTime (Get-Date).AddMinutes(30) -ShadowMode:$ShadowMode.IsPresent -DryRun:$DryRun.IsPresent
         exit 0
     }
@@ -146,7 +149,6 @@ try {
         $nextProbeTime = (Get-Date).AddMinutes($nextProbeMinutes)
         Log-Message "Scheduling next safety probe at $($nextProbeTime.ToString('yyyy-MM-dd HH:mm:ss'))"
         
-        . (Join-Path $SchedulerDir "Update-ScheduledTrigger.ps1")
         Update-ScheduledTrigger -TargetDateTime $nextProbeTime -ShadowMode:$ShadowMode.IsPresent -DryRun:$DryRun.IsPresent
         
         $stateRecord = [PSCustomObject]@{
@@ -188,25 +190,14 @@ try {
 
     Log-Message "Invoking Decision Engine: python $($engineArgs -join ' ')"
 
-    $enginePsi = New-Object System.Diagnostics.ProcessStartInfo
-    $enginePsi.FileName = "python"
-    $enginePsi.Arguments = $engineArgs -join " "
-    $enginePsi.UseShellExecute = $false
-    $enginePsi.RedirectStandardOutput = $true
-    $enginePsi.RedirectStandardError = $true
-    $enginePsi.CreateNoWindow = $true
+    $engineRes = Invoke-BoundedProcess -FilePath "python" -Arguments ($engineArgs -join " ") -TimeoutSeconds 15
 
-    $engineProc = [System.Diagnostics.Process]::Start($enginePsi)
-    $engineOut = $engineProc.StandardOutput.ReadToEnd()
-    $engineErr = $engineProc.StandardError.ReadToEnd()
-    $engineProc.WaitForExit()
-
-    if ($engineProc.ExitCode -ne 0) {
-        Log-Message "Decision Engine failed with exit code $($engineProc.ExitCode): $engineErr" "ERROR"
+    if (-not $engineRes.Success -or $engineRes.ExitCode -ne 0) {
+        Log-Message "Decision Engine failed or timed out (ExitCode=$($engineRes.ExitCode), TimedOut=$($engineRes.TimedOut)): $($engineRes.Stderr)" "ERROR"
         exit 2
     }
 
-    $decision = $engineOut | ConvertFrom-Json
+    $decision = $engineRes.Stdout | ConvertFrom-Json
     Log-Message "Decision Engine Result: Action=$($decision.decision), ScheduledTime=$($decision.scheduledTime), ExpectedBoundary=$($decision.expectedBoundary), Score=$($decision.score), Reason=$($decision.reason)"
 
     # Save initial runtime state
@@ -221,8 +212,6 @@ try {
     $currentState | ConvertTo-Json -Depth 5 | Out-File -FilePath $StateFile -Encoding utf8
 
     # 4. Action Execution & Transaction Chain
-    . (Join-Path $SchedulerDir "Update-ScheduledTrigger.ps1")
-
     switch ($decision.decision) {
         "WARMUP_NOW" {
             Log-Message "Decision is WARMUP_NOW."
@@ -257,12 +246,13 @@ try {
             if ($postCls.ResetAt) { $postEngineArgs += @("--active-until", "`"$($postCls.ResetAt)`"") }
             if ($postCls.WeeklyBlocked) { $postEngineArgs += "--weekly-exhausted" }
 
-            $enginePsi.Arguments = $postEngineArgs -join " "
-            $postProc = [System.Diagnostics.Process]::Start($enginePsi)
-            $postOut = $postProc.StandardOutput.ReadToEnd()
-            $postProc.WaitForExit()
+            $postEngineRes = Invoke-BoundedProcess -FilePath "python" -Arguments ($postEngineArgs -join " ") -TimeoutSeconds 15
+            if (-not $postEngineRes.Success -or $postEngineRes.ExitCode -ne 0) {
+                Log-Message "Post-warmup Decision Engine failed or timed out: $($postEngineRes.Stderr)" "ERROR"
+                exit 4
+            }
             
-            $postDecision = $postOut | ConvertFrom-Json
+            $postDecision = $postEngineRes.Stdout | ConvertFrom-Json
             Log-Message "Post-Warmup Replanned: Action=$($postDecision.decision), NextSchedule=$($postDecision.scheduledTime)"
 
             if ($postDecision.scheduledTime) {

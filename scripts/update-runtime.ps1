@@ -1,4 +1,4 @@
-# update-runtime.ps1
+﻿# update-runtime.ps1
 # Deploys source repository scripts and configs to %LOCALAPPDATA%\CodexWarmupV2\runtime
 
 [CmdletBinding()]
@@ -25,7 +25,9 @@ $filesToDeploy = @(
     "src\runtime\Resolve-CodexRuntime.ps1",
     "src\runtime\Get-CodexRateLimits.ps1",
     "src\runtime\Execute-CodexWarmup.ps1",
+    "src\runtime\ProcessRunner.psm1",
     "src\runtime\RateLimitClassifier.psm1",
+    "src\scheduler\ScheduledTrigger.psm1",
     "src\scheduler\Update-ScheduledTrigger.ps1",
     "src\engine\decision_engine.py",
     "src\scheduler\controller.ps1"

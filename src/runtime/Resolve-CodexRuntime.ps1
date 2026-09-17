@@ -1,4 +1,4 @@
-function Resolve-CodexExecutable {
+﻿function Resolve-CodexExecutable {
     [CmdletBinding()]
     param()
 
@@ -68,6 +68,19 @@ function Test-CodexExecutable {
     param([string]$FilePath)
     if (-not (Test-Path $FilePath)) { return $null }
     try {
+        $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        if (-not $scriptDir) { $scriptDir = $PSScriptRoot }
+        $runnerModule = Join-Path $scriptDir "ProcessRunner.psm1"
+        if (Test-Path $runnerModule) {
+            Import-Module $runnerModule -Force
+            $procRes = Invoke-BoundedProcess -FilePath $FilePath -Arguments "--version" -TimeoutSeconds 5
+            if ($procRes.Success -and $procRes.Stdout) {
+                return $procRes.Stdout.Trim()
+            }
+            return $null
+        }
+
+        # Fallback bounded execution if module not co-located
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $FilePath
         $psi.Arguments = "--version"
@@ -76,11 +89,24 @@ function Test-CodexExecutable {
         $psi.RedirectStandardError = $true
         $psi.CreateNoWindow = $true
         $p = [System.Diagnostics.Process]::Start($psi)
-        $out = $p.StandardOutput.ReadToEnd()
-        $err = $p.StandardError.ReadToEnd()
-        $p.WaitForExit(5000) | Out-Null
-        if ($p.ExitCode -eq 0 -and $out) {
-            return $out.Trim()
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $errTask = $p.StandardError.ReadToEndAsync()
+        $exited = $p.WaitForExit(5000)
+        if (-not $exited) {
+            try {
+                $taskkillPath = "$env:SystemRoot\System32\taskkill.exe"
+                if (Test-Path $taskkillPath) {
+                    & $taskkillPath /PID $p.Id /T /F | Out-Null
+                } else {
+                    $p.Kill()
+                }
+            } catch {}
+            $p.WaitForExit(1000) | Out-Null
+            return $null
+        }
+        [System.Threading.Tasks.Task]::WaitAll(@($outTask, $errTask), 1000) | Out-Null
+        if ($p.ExitCode -eq 0 -and $outTask.IsCompleted -and $outTask.Result) {
+            return $outTask.Result.Trim()
         }
     } catch {
         return $null
