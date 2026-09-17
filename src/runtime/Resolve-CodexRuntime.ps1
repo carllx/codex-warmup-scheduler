@@ -88,6 +88,8 @@ function Test-CodexExecutable {
     return $null
 }
 
-# Run Resolver
-$resolved = Resolve-CodexExecutable
-$resolved | ConvertTo-Json -Compress
+# If run directly as a script, output JSON
+if ($MyInvocation.InvocationName -ne '.' -and $MyInvocation.Line -notmatch '^\s*\.\s+') {
+    $resolved = Resolve-CodexExecutable
+    $resolved | ConvertTo-Json -Compress
+}

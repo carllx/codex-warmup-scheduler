@@ -25,6 +25,8 @@ $filesToDeploy = @(
     "src\runtime\Resolve-CodexRuntime.ps1",
     "src\runtime\Get-CodexRateLimits.ps1",
     "src\runtime\Execute-CodexWarmup.ps1",
+    "src\runtime\RateLimitClassifier.psm1",
+    "src\scheduler\Update-ScheduledTrigger.ps1",
     "src\engine\decision_engine.py",
     "src\scheduler\controller.ps1"
 )

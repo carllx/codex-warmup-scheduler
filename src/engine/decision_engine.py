@@ -354,13 +354,27 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True, help="Path to config.json")
     parser.add_argument("--active-until", type=str, default=None, help="Active window expiry ISO timestamp")
     parser.add_argument("--weekly-exhausted", action="store_true", help="Whether weekly quota is exhausted")
+    parser.add_argument("--window-status", type=str, default=None, choices=["ACTIVE", "INACTIVE", "AMBIGUOUS", "BLOCKED"], help="Window status")
     args = parser.parse_args()
 
     engine = DecisionEngine(config_path=args.config)
+    
+    window_status = args.window_status
+    if not window_status:
+        window_status = "ACTIVE" if args.active_until else "INACTIVE"
+
     state = {
         "now": args.now,
-        "activeWindowUntil": args.active_until,
-        "weeklyQuotaExhausted": args.weekly_exhausted
+        "quota": {
+            "resetAt": args.active_until,
+            "weeklyBlocked": args.weekly_exhausted,
+            "fiveHourWindowStatus": window_status,
+            "windowDurationMinutes": 300
+        },
+        "device": {
+            "wakeToRunAvailable": True,
+            "state": "AWAKE"
+        }
     }
     result = engine.plan_next_action(state)
     print(json.dumps(result, ensure_ascii=False, indent=2))

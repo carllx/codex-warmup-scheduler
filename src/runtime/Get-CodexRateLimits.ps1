@@ -1,5 +1,18 @@
-. "$env:LOCALAPPDATA\CodexWarmupV2\Resolve-CodexExecutable.ps1"
+# Get-CodexRateLimits.ps1
+# Queries Codex app-server via JSON-RPC stdio to fetch real-time rate limits
+
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = "Stop"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+. (Join-Path $scriptDir "Resolve-CodexRuntime.ps1")
 $runtime = Resolve-CodexExecutable
+
+if (-not $runtime.validated) {
+    throw "Cannot read rate limits: Codex executable could not be resolved."
+}
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $runtime.path
@@ -29,7 +42,7 @@ function Read-RpcResponse($reader, $expectedId) {
 }
 
 # 1. initialize
-$writer.WriteLine((@{ jsonrpc="2.0"; id=1; method="initialize"; params=@{ clientInfo=@{ name="test"; version="1.0" } } } | ConvertTo-Json -Compress))
+$writer.WriteLine((@{ jsonrpc="2.0"; id=1; method="initialize"; params=@{ clientInfo=@{ name="warmup-scheduler"; version="2.0" } } } | ConvertTo-Json -Compress))
 $writer.Flush()
 $initResp = Read-RpcResponse $reader 1
 
@@ -43,9 +56,9 @@ $writer.Flush()
 $rateResp = Read-RpcResponse $reader 2
 
 $proc.StandardInput.Close()
-$proc.WaitForExit(2000) | Out-Null
+$proc.WaitForExit(3000) | Out-Null
 if (-not $proc.HasExited) { $proc.Kill() }
 
-Write-Host "RATE_LIMIT_JSON_START"
-Write-Host $rateResp
-Write-Host "RATE_LIMIT_JSON_END"
+Write-Output "RATE_LIMIT_JSON_START"
+Write-Output $rateResp
+Write-Output "RATE_LIMIT_JSON_END"

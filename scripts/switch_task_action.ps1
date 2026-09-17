@@ -15,7 +15,7 @@ if (-not (Test-Path $runtimeController)) {
 $task = Get-ScheduledTask -TaskName $taskName
 Write-Host "Current Task State: $($task.State)"
 
-$argStr = "-NoProfile -ExecutionPolicy Bypass -File `"$runtimeController`""
+$argStr = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runtimeController`""
 if ($ShadowMode) {
     $argStr += " -ShadowMode"
 }
