@@ -21,6 +21,8 @@ function Assert-Condition([bool]$condition, [string]$testName, [string]$detail) 
     }
 }
 
+Import-Module (Join-Path $RepoRoot "src\runtime\RateLimitClassifier.psm1") -Force
+
 # --- R1: Primary is not 300m (primary=60m, secondary=300m) ---
 try {
     $now = [DateTimeOffset]::UtcNow
@@ -28,24 +30,25 @@ try {
     $fixture1 = [PSCustomObject]@{
         result = [PSCustomObject]@{
             ordinaryUsageAllowed = $true
-            rateLimits = [PSCustomObject]@{
-                primary = [PSCustomObject]@{
-                    limitId = "codex"
-                    windowDurationMins = 60
-                    usedPercent = 10
-                    resetsAt = [long]($now.AddMinutes(40).ToUnixTimeSeconds())
-                }
-                secondary = [PSCustomObject]@{
-                    limitId = "codex"
-                    windowDurationMins = 300
-                    usedPercent = 25
-                    resetsAt = $resetEpoch
+            rateLimitsByLimitId = [PSCustomObject]@{
+                codex = [PSCustomObject]@{
+                    primary = [PSCustomObject]@{
+                        limitId = "codex"
+                        windowDurationMins = 60
+                        usedPercent = 10
+                        resetsAt = [long]($now.AddMinutes(40).ToUnixTimeSeconds())
+                    }
+                    secondary = [PSCustomObject]@{
+                        limitId = "codex"
+                        windowDurationMins = 300
+                        usedPercent = 25
+                        resetsAt = $resetEpoch
+                    }
                 }
             }
         }
     }
-    . (Join-Path $RepoRoot "src\runtime\Classify-RateLimitWindow.ps1")
-    $r1Res = Classify-RateLimitWindow -RateLimitResponse $fixture1
+    $r1Res = ConvertTo-NormalizedQuotaState -RateLimitResponse $fixture1
     
     Assert-Condition ($r1Res.OrdinaryUsageAllowed -eq "TRUE") "R1.1: OrdinaryUsageAllowed is TRUE" ""
     Assert-Condition ($r1Res.FiveHourWindowStatus -eq "ACTIVE") "R1.2: 5h Window Status is ACTIVE" "Got: $($r1Res.FiveHourWindowStatus)"
@@ -64,21 +67,24 @@ try {
     $probe2Reset = [long]($now.AddMinutes(300).ToUnixTimeSeconds())
     
     @{ ResetEpoch = $probe1Reset } | ConvertTo-Json | Out-File -FilePath $tempCache -Encoding utf8 -Force
+    $cacheObj = Get-Content -Raw $tempCache | ConvertFrom-Json
     
     $fixture2 = [PSCustomObject]@{
         result = [PSCustomObject]@{
             ordinaryUsageAllowed = $true
-            rateLimits = [PSCustomObject]@{
-                primary = [PSCustomObject]@{
-                    limitId = "codex"
-                    windowDurationMins = 300
-                    usedPercent = 0
-                    resetsAt = $probe2Reset
+            rateLimitsByLimitId = [PSCustomObject]@{
+                codex = [PSCustomObject]@{
+                    primary = [PSCustomObject]@{
+                        limitId = "codex"
+                        windowDurationMins = 300
+                        usedPercent = 0
+                        resetsAt = $probe2Reset
+                    }
                 }
             }
         }
     }
-    $r2Res = Classify-RateLimitWindow -RateLimitResponse $fixture2 -HistoryCachePath $tempCache
+    $r2Res = ConvertTo-NormalizedQuotaState -RateLimitResponse $fixture2 -PreviousProbe $cacheObj
     Remove-Item -Path $tempCache -Force -ErrorAction SilentlyContinue
 
     Assert-Condition ($r2Res.ResetAnchorStatus -eq "SLIDING_OR_UNINITIALIZED") "R2.1: Detected SLIDING_OR_UNINITIALIZED" "Got: $($r2Res.ResetAnchorStatus)"
@@ -93,17 +99,19 @@ try {
     $fixture3 = [PSCustomObject]@{
         result = [PSCustomObject]@{
             ordinaryUsageAllowed = $false
-            rateLimits = [PSCustomObject]@{
-                primary = [PSCustomObject]@{
-                    limitId = "codex"
-                    windowDurationMins = 300
-                    usedPercent = 10
-                    resetsAt = [long](([DateTimeOffset]::UtcNow).AddHours(2).ToUnixTimeSeconds())
+            rateLimitsByLimitId = [PSCustomObject]@{
+                codex = [PSCustomObject]@{
+                    primary = [PSCustomObject]@{
+                        limitId = "codex"
+                        windowDurationMins = 300
+                        usedPercent = 10
+                        resetsAt = [long](([DateTimeOffset]::UtcNow).AddHours(2).ToUnixTimeSeconds())
+                    }
                 }
             }
         }
     }
-    $r3Res = Classify-RateLimitWindow -RateLimitResponse $fixture3
+    $r3Res = ConvertTo-NormalizedQuotaState -RateLimitResponse $fixture3
 
     Assert-Condition ($r3Res.OrdinaryUsageAllowed -eq "FALSE") "R3.1: OrdinaryUsageAllowed is FALSE" ""
     Assert-Condition ($r3Res.FiveHourWindowStatus -eq "BLOCKED") "R3.2: 5h Window Status is BLOCKED" ""
@@ -115,7 +123,7 @@ try {
 # --- R4: Delayed missed run (starts when available, probes fresh server state, replans) ---
 try {
     $ctrlPath = Join-Path $RepoRoot "src\scheduler\controller.ps1"
-    $ctrlOut = & $ctrlPath -ShadowMode -DryRun
+    $ctrlOut = & pwsh -NoProfile -ExecutionPolicy Bypass -File $ctrlPath -ShadowMode -DryRun
     $ctrlText = $ctrlOut -join "`n"
 
     Assert-Condition ($ctrlText -match "Codex Runtime resolved") "R4.1: Controller resolved Codex CLI" ""
@@ -137,7 +145,7 @@ try {
     if ($hasLock) {
         try {
             $subProcessPsi = New-Object System.Diagnostics.ProcessStartInfo
-            $subProcessPsi.FileName = "powershell.exe"
+            $subProcessPsi.FileName = "pwsh"
             $subProcessPsi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ctrlPath`" -ShadowMode -DryRun"
             $subProcessPsi.UseShellExecute = $false
             $subProcessPsi.RedirectStandardOutput = $true

@@ -11,12 +11,18 @@ import unittest
 from datetime import datetime, timezone, timedelta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLASSIFIER_PATH = os.path.join(REPO_ROOT, "src", "runtime", "Classify-RateLimitWindow.ps1")
+CLASSIFIER_PATH = os.path.join(REPO_ROOT, "src", "runtime", "RateLimitClassifier.psm1")
 CONTROLLER_PATH = os.path.join(REPO_ROOT, "src", "scheduler", "controller.ps1")
 
 def run_powershell(cmd):
-    full_cmd = f'pwsh -NoProfile -ExecutionPolicy Bypass -Command "{cmd}"'
-    res = subprocess.run(full_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=REPO_ROOT)
+    res = subprocess.run(
+        ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd],
+        shell=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=REPO_ROOT
+    )
     return res.returncode, res.stdout, res.stderr
 
 class TestRegressions(unittest.TestCase):
@@ -33,18 +39,20 @@ class TestRegressions(unittest.TestCase):
         fixture = {
             "result": {
                 "ordinaryUsageAllowed": True,
-                "rateLimits": {
-                    "primary": {
-                        "limitId": "codex",
-                        "windowDurationMins": 60,
-                        "usedPercent": 10,
-                        "resetsAt": int((now + timedelta(minutes=40)).timestamp())
-                    },
-                    "secondary": {
-                        "limitId": "codex",
-                        "windowDurationMins": 300,
-                        "usedPercent": 25,
-                        "resetsAt": reset_epoch
+                "rateLimitsByLimitId": {
+                    "codex": {
+                        "primary": {
+                            "limitId": "codex",
+                            "windowDurationMins": 60,
+                            "usedPercent": 10,
+                            "resetsAt": int((now + timedelta(minutes=40)).timestamp())
+                        },
+                        "secondary": {
+                            "limitId": "codex",
+                            "windowDurationMins": 300,
+                            "usedPercent": 25,
+                            "resetsAt": reset_epoch
+                        }
                     }
                 }
             }
@@ -57,8 +65,8 @@ class TestRegressions(unittest.TestCase):
         try:
             ps_cmd = (
                 f"$payload = Get-Content -Raw '{fixture_path}' | ConvertFrom-Json; "
-                f". '{CLASSIFIER_PATH}'; "
-                f"$res = Classify-RateLimitWindow -RateLimitResponse $payload; "
+                f"Import-Module '{CLASSIFIER_PATH}' -Force; "
+                f"$res = ConvertTo-NormalizedQuotaState -RateLimitResponse $payload; "
                 f"$res | ConvertTo-Json -Depth 5"
             )
             code, stdout, stderr = run_powershell(ps_cmd)
@@ -89,12 +97,14 @@ class TestRegressions(unittest.TestCase):
         fixture = {
             "result": {
                 "ordinaryUsageAllowed": True,
-                "rateLimits": {
-                    "primary": {
-                        "limitId": "codex",
-                        "windowDurationMins": 300,
-                        "usedPercent": 0,
-                        "resetsAt": probe2_reset
+                "rateLimitsByLimitId": {
+                    "codex": {
+                        "primary": {
+                            "limitId": "codex",
+                            "windowDurationMins": 300,
+                            "usedPercent": 0,
+                            "resetsAt": probe2_reset
+                        }
                     }
                 }
             }
@@ -107,8 +117,9 @@ class TestRegressions(unittest.TestCase):
         try:
             ps_cmd = (
                 f"$payload = Get-Content -Raw '{fixture_path}' | ConvertFrom-Json; "
-                f". '{CLASSIFIER_PATH}'; "
-                f"$res = Classify-RateLimitWindow -RateLimitResponse $payload -HistoryCachePath '{cache_path}'; "
+                f"$prev = Get-Content -Raw '{cache_path}' | ConvertFrom-Json; "
+                f"Import-Module '{CLASSIFIER_PATH}' -Force; "
+                f"$res = ConvertTo-NormalizedQuotaState -RateLimitResponse $payload -PreviousProbe $prev; "
                 f"$res | ConvertTo-Json -Depth 5"
             )
             code, stdout, stderr = run_powershell(ps_cmd)
@@ -131,12 +142,14 @@ class TestRegressions(unittest.TestCase):
         fixture = {
             "result": {
                 "ordinaryUsageAllowed": False,
-                "rateLimits": {
-                    "primary": {
-                        "limitId": "codex",
-                        "windowDurationMins": 300,
-                        "usedPercent": 10,
-                        "resetsAt": int((datetime.now(timezone.utc) + timedelta(hours=2)).timestamp())
+                "rateLimitsByLimitId": {
+                    "codex": {
+                        "primary": {
+                            "limitId": "codex",
+                            "windowDurationMins": 300,
+                            "usedPercent": 10,
+                            "resetsAt": int((datetime.now(timezone.utc) + timedelta(hours=2)).timestamp())
+                        }
                     }
                 }
             }
@@ -149,8 +162,8 @@ class TestRegressions(unittest.TestCase):
         try:
             ps_cmd = (
                 f"$payload = Get-Content -Raw '{fixture_path}' | ConvertFrom-Json; "
-                f". '{CLASSIFIER_PATH}'; "
-                f"$res = Classify-RateLimitWindow -RateLimitResponse $payload; "
+                f"Import-Module '{CLASSIFIER_PATH}' -Force; "
+                f"$res = ConvertTo-NormalizedQuotaState -RateLimitResponse $payload; "
                 f"$res | ConvertTo-Json -Depth 5"
             )
             code, stdout, stderr = run_powershell(ps_cmd)
@@ -167,9 +180,9 @@ class TestRegressions(unittest.TestCase):
 
     def test_r4_delayed_missed_run_probes_fresh_state_and_replans(self):
         """
-        R4: Verify controller in -ShadowMode performs fresh probe & replan, never blind execution.
+        R4: Verify controller in -ShadowMode -DryRun performs fresh probe & replan, never blind execution.
         """
-        cmd = f"& '{CONTROLLER_PATH}' -ShadowMode"
+        cmd = f"& '{CONTROLLER_PATH}' -ShadowMode -DryRun"
         code, stdout, stderr = run_powershell(cmd)
         self.assertEqual(code, 0, f"Controller failed: {stderr}")
         self.assertIn("=== Codex Warmup V2 Controller Started ===", stdout)
@@ -181,22 +194,30 @@ class TestRegressions(unittest.TestCase):
 
     def test_r5_named_mutex_concurrency_guard(self):
         """
-        R5: Verify named mutex 'Global\CodexWarmupV2Controller' prevents concurrent instances.
+        R5: Verify named mutex 'Global\\CodexWarmupV2Controller' prevents concurrent instances.
         """
-        ps_script = """
-        $mutex = New-Object System.Threading.Mutex($false, "Global\CodexWarmupV2Controller")
+        ps_script = f"""
+        $mutex = New-Object System.Threading.Mutex($false, "Global\\CodexWarmupV2Controller")
         $hasLock = $mutex.WaitOne(0, $false)
-        if ($hasLock) {
-            try {
-                # Launch a second controller process while holding the lock
-                $proc = Start-Process -FilePath "pwsh" -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "'""" + CONTROLLER_PATH + """'", "-ShadowMode" -Wait -PassThru -NoNewWindow
-                Write-Host "SecondInstanceExitCode=$($proc.ExitCode)"
-            } finally {
+        if ($hasLock) {{
+            try {{
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = "pwsh"
+                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"{CONTROLLER_PATH}`" -ShadowMode -DryRun"
+                $psi.UseShellExecute = $false
+                $psi.RedirectStandardOutput = $true
+                $psi.CreateNoWindow = $true
+                $p = [System.Diagnostics.Process]::Start($psi)
+                $out = $p.StandardOutput.ReadToEnd()
+                $p.WaitForExit()
+                Write-Host $out
+                Write-Host "SecondInstanceExitCode=$($p.ExitCode)"
+            }} finally {{
                 $mutex.ReleaseMutex()
-            }
-        } else {
+            }}
+        }} else {{
             Write-Host "CouldNotAcquireInitialLock"
-        }
+        }}
         """
         code, stdout, stderr = run_powershell(ps_script)
         self.assertEqual(code, 0, f"Mutex test failed: {stderr}")
