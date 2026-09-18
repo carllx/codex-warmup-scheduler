@@ -5,7 +5,8 @@ Asserts:
 - S1: Artificial pre-work alignment (04:00 warmup for 09:00 work start) -> NO_ACTION
 - S2: Rest day (expectedWorkWindows = []) -> NO_ACTION with NO_EXPECTED_WORK baseline
 - S3: Near-term natural work (user starting work now) -> NO_ACTION over natural use
-- S4: Positive-benefit search / verified positive warmup scenario
+- S4: Afternoon work alignment rejected -> deterministic NO_ACTION (identical available state from 15:00)
+- S5: True cross-reset capacity -> SCHEDULE_WARMUP at 11:00 (serves 160 vs baseline 100)
 """
 
 import os
@@ -118,10 +119,14 @@ class TestSemanticGate(unittest.TestCase):
         self.assertEqual(plan["baselineType"], "NEXT_NATURAL_USE")
         self.assertLessEqual(plan["incrementalBenefit"], plan["incrementalThreshold"])
 
-    def test_s4_positive_benefit_fixture_or_search(self):
+    def test_s4_afternoon_work_alignment_rejected(self):
         """
-        S4: Legitimate positive warmup case.
-        Example: Daytime alignment for late shift where intermediate warmup achieves positive incremental benefit.
+        S4: Expected work = 15:00–20:00.
+        NO_WARMUP: 15:00 natural use -> 15:00–20:00 window.
+        WARMUP_AT(10:00): 10:00 artificial window -> reset 15:00 -> 15:00 natural use -> 15:00–20:00 window.
+        Since both yield identical available state from 15:00 onward, 10:00 warmup
+        must not obtain positive incremental benefit merely because reset aligns with 15:00.
+        Deterministically asserts NO_ACTION.
         """
         state = {
             "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
@@ -142,10 +147,62 @@ class TestSemanticGate(unittest.TestCase):
             }
         }
         plan = self.engine.plan_next_action(state)
-        self.assertIn(plan["decision"], ["SCHEDULE_WARMUP", "NO_ACTION"])
-        if plan["decision"] == "SCHEDULE_WARMUP":
-            self.assertGreater(plan["incrementalBenefit"], plan["incrementalThreshold"])
-            self.assertFalse(plan["breakdown"]["isSleep"])
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertLessEqual(plan["incrementalBenefit"], plan["incrementalThreshold"])
+        cand_10_dt = self.engine.parse_time("2026-09-18T10:00:00+08:00")
+        cand_10, _ = self.engine.score_candidate(cand_10_dt, state)
+        cand_10_inc = cand_10["candidateUtility"] - plan["baselineUtility"] - cand_10["incrementalCosts"]
+        self.assertLessEqual(cand_10_inc, 0.0)
+
+    def test_s5_true_cross_reset_capacity(self):
+        """
+        S5: High demand across 15:00–20:00 exceeding single window capacity:
+        - 15:00–16:00: demand 80
+        - 16:00–20:00: demand 80
+        Total demand = 160. Single window capacity = 100. Warmup consumption = 1.0.
+
+        NO_WARMUP:
+        - 15:00 natural start -> single window [15:00, 20:00] serves 100, leaving 60 unserved.
+
+        WARMUP_AT(11:00):
+        - Window 1 [11:00, 16:00] (capacity 99) serves 80 between 15:00–16:00.
+        - 16:00 reset -> Window 2 [16:00, 21:00] serves 80 between 16:00–20:00.
+        - Total served = 160 (0 unserved).
+        - Incremental served = 160 - 100 = +60.
+        - Net benefit = 60 - 5 (warmup cost) = 55.0 > incremental threshold (15.0).
+        - Decision = SCHEDULE_WARMUP at 11:00.
+        """
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {
+                "resetAt": None,
+                "weeklyBlocked": False,
+                "fiveHourWindowStatus": "INACTIVE",
+                "windowDurationMinutes": 300
+            },
+            "userProfile": {
+                "sleepWindows": [["01:30", "08:00"]],
+                "expectedWorkWindows": [
+                    ["15:00", "20:00"]
+                ],
+                "timezone": "Asia/Shanghai",
+                "expectedPrimaryWorkStart": "15:00"
+            },
+            "demandProfile": [
+                {"start": "15:00", "end": "16:00", "demand": 80.0},
+                {"start": "16:00", "end": "20:00", "demand": 80.0}
+            ]
+        }
+        plan = self.engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "SCHEDULE_WARMUP")
+        self.assertIn("11:00", plan["scheduledTime"])
+        self.assertGreater(plan["incrementalBenefit"], plan["incrementalThreshold"])
+        self.assertEqual(plan["breakdown"]["servedDemand"], 160.0)
+        self.assertEqual(plan["breakdown"]["unservedDemand"], 0.0)
+        self.assertEqual(plan["breakdown"]["baselineServedDemand"], 100.0)
+        self.assertEqual(plan["breakdown"]["baselineUnservedDemand"], 60.0)
+        self.assertEqual(plan["incrementalBenefit"], 55.0)
 
 if __name__ == "__main__":
     unittest.main()

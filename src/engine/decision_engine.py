@@ -25,62 +25,42 @@ class DecisionEngine:
         self.w_wake = self.weights.get("wakeBenefit", 1.0)
         self.w_cost = self.weights.get("warmupCost", 5.0)
         self.p_sleep_base = self.weights.get("sleepDisruptionBase", 10.0)
-        self.p_sleep_2nd = self.weights.get("sleepDisruptionSecond", 40.0)
-        self.p_sleep_3rd = self.weights.get("sleepDisruptionThird", 100.0)
-        self.p_redundant = self.weights.get("redundantPenalty", 1000.0)
         self.min_useful_score = self.weights.get("minimumUsefulScore", 30.0)
         self.min_incremental_benefit = self.planning.get("minIncrementalBenefit", 15.0)
 
         self.horizon_hours = self.planning.get("horizonHours", 24)
         self.grid_step_min = self.planning.get("gridStepMinutes", 15)
         self.window_duration_min = self.planning.get("windowDurationMin", 300)
+        self.window_capacity = self.planning.get("windowCapacity", 100.0)
+        self.warmup_consumption = self.planning.get("warmupConsumption", 1.0)
 
     def parse_time(self, t_str):
         if isinstance(t_str, datetime):
             return t_str
         return dateutil.parser.isoparse(t_str)
 
+    def is_in_sleep(self, dt, sleep_windows):
+        if not sleep_windows:
+            return False
+        t_hm = dt.strftime("%H:%M")
+        windows = [sleep_windows] if isinstance(sleep_windows[0], str) else sleep_windows
+        return any((s <= t_hm < e) if s < e else (t_hm >= s or t_hm < e) for s, e in windows)
+
     def get_time_weight(self, dt, profile=None):
         t_hm = dt.strftime("%H:%M")
         if profile and profile.get("expectedWorkWindows") is not None:
             work_windows = profile.get("expectedWorkWindows", [])
             if not work_windows:
-                # Rest day: all work weights 0
                 return 0.0
-            for w in work_windows:
-                s, e = w[0], w[1]
-                if s <= t_hm < e:
-                    return 1.0
-            # Outside work windows on work day
-            sleep_windows = profile.get("sleepWindows", [])
-            if self.is_in_sleep(dt, sleep_windows):
-                return 0.0
-            return 0.2
+            if any((s <= t_hm < e) if s < e else (t_hm >= s or t_hm < e) for s, e in work_windows):
+                return 1.0
+            return 0.0 if self.is_in_sleep(dt, profile.get("sleepWindows", [])) else 0.2
 
         for slot in self.user_value_weights:
             s, e = slot["start"], slot["end"]
-            if s < e:
-                if s <= t_hm < e:
-                    return slot["weight"]
-            else: # overnight
-                if t_hm >= s or t_hm < e:
-                    return slot["weight"]
+            if (s <= t_hm < e) if s < e else (t_hm >= s or t_hm < e):
+                return slot["weight"]
         return 0.2
-
-    def is_in_sleep(self, dt, sleep_windows):
-        t_hm = dt.strftime("%H:%M")
-        if not sleep_windows:
-            return False
-        if isinstance(sleep_windows[0], str):
-            sleep_windows = [sleep_windows]
-        for s, e in sleep_windows:
-            if s < e:
-                if s <= t_hm < e:
-                    return True
-            else:
-                if t_hm >= s or t_hm < e:
-                    return True
-        return False
 
     def evaluate_window_utility(self, t, profile, now=None):
         if now is None:
@@ -125,110 +105,183 @@ class DecisionEngine:
             "bestAlignScore": best_align_score
         }
 
+    def evaluate_trajectory_utility(self, policy_action, state):
+        """
+        Simulates full state trajectory over horizon [now, now + horizon].
+        Models:
+        - Active quota window from prior usage (resetAt)
+        - Artificial warmup at t_cand (WARMUP_AT)
+        - Natural usage demand (from demandProfile or expectedWorkWindows)
+        - Window resets and post-reset natural usage
+        - Quota window capacity (default 100) and warmup consumption (default 1)
+        - Served demand vs unserved demand, incremental costs
+        """
+        now = self.parse_time(state["now"])
+        quota = state.get("quota", {})
+        profile = state.get("userProfile", {})
+        work_windows = profile.get("expectedWorkWindows", []) if profile else []
+        sleep_windows = profile.get("sleepWindows", []) if profile else []
+
+        demand_profile = state.get("demandProfile") or profile.get("demandProfile") or self.config.get("demandProfile")
+
+        action_type, t_cand = policy_action
+        warmup_cost = 0.0
+        sleep_disruption = 0.0
+        is_sleep_cand = False
+
+        if action_type == "WARMUP_AT" and t_cand is not None:
+            warmup_cost = self.w_cost
+            is_sleep_cand = self.is_in_sleep(t_cand, sleep_windows)
+            if is_sleep_cand:
+                sleep_disruption = self.p_sleep_base
+
+        active_until = None
+        remaining_capacity = 0.0
+
+        if quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
+            reset_at = self.parse_time(quota["resetAt"])
+            if reset_at.tzinfo is None and now.tzinfo is not None:
+                reset_at = reset_at.replace(tzinfo=now.tzinfo)
+            if reset_at > now:
+                active_until = reset_at
+                remaining_capacity = self.window_capacity
+
+        windows = []
+        if active_until:
+            windows.append({
+                "start": now.strftime("%Y-%m-%d %H:%M"),
+                "end": active_until.strftime("%Y-%m-%d %H:%M"),
+                "source": "INITIAL_ACTIVE",
+                "capacity": remaining_capacity
+            })
+
+        curr = now
+        end_time = now + timedelta(hours=self.horizon_hours)
+        step = timedelta(minutes=self.grid_step_min)
+
+        total_demand, total_served, total_unserved = 0.0, 0.0, 0.0
+
+        while curr < end_time:
+            # Check window expiration / reset
+            if active_until is not None and curr >= active_until:
+                active_until = None
+                remaining_capacity = 0.0
+
+            # Artificial warmup trigger
+            if action_type == "WARMUP_AT" and t_cand is not None:
+                if curr <= t_cand < curr + step:
+                    if active_until is None:
+                        active_until = t_cand + timedelta(minutes=self.window_duration_min)
+                        remaining_capacity = max(0.0, self.window_capacity - self.warmup_consumption)
+                        windows.append({
+                            "start": t_cand.strftime("%Y-%m-%d %H:%M"),
+                            "end": active_until.strftime("%Y-%m-%d %H:%M"),
+                            "source": "ARTIFICIAL_WARMUP",
+                            "capacity": remaining_capacity
+                        })
+
+            # Determine demand at this time step
+            curr_hm = curr.strftime("%H:%M")
+            step_demand = 0.0
+
+            if demand_profile:
+                for band in demand_profile:
+                    b_s, b_e = band["start"], band["end"]
+                    in_band = (b_s <= curr_hm < b_e) if b_s < b_e else (curr_hm >= b_s or curr_hm < b_e)
+                    if in_band:
+                        b_s_dt = datetime.strptime(b_s, "%H:%M")
+                        b_e_dt = datetime.strptime(b_e, "%H:%M") + (timedelta(days=1) if b_e <= b_s else timedelta(0))
+                        steps = max(1.0, (b_e_dt - b_s_dt).total_seconds() / (60.0 * self.grid_step_min))
+                        step_demand += band["demand"] / steps
+            else:
+                if any((w[0] <= curr_hm < w[1]) if w[0] < w[1] else (curr_hm >= w[0] or curr_hm < w[1]) for w in work_windows):
+                    step_demand = 2.0
+
+            total_demand += step_demand
+
+            # Natural use trigger: demand without active window opens fresh window
+            if step_demand > 0:
+                if active_until is None:
+                    active_until = curr + timedelta(minutes=self.window_duration_min)
+                    remaining_capacity = self.window_capacity
+                    windows.append({
+                        "start": curr.strftime("%Y-%m-%d %H:%M"),
+                        "end": active_until.strftime("%Y-%m-%d %H:%M"),
+                        "source": "NATURAL_USE",
+                        "capacity": remaining_capacity
+                    })
+
+                # Serve demand from active window capacity
+                if active_until is not None and curr < active_until:
+                    servable = min(step_demand, remaining_capacity)
+                    remaining_capacity -= servable
+                    total_served += servable
+                    total_unserved += (step_demand - servable)
+                else:
+                    total_unserved += step_demand
+
+            curr += step
+
+        total_costs = warmup_cost + sleep_disruption
+        return {
+            "totalServedDemand": round(total_served, 1),
+            "totalUnservedDemand": round(total_unserved, 1),
+            "totalDemand": round(total_demand, 1),
+            "incrementalCosts": round(total_costs, 1),
+            "warmupCost": round(warmup_cost, 1),
+            "sleepDisruption": round(sleep_disruption, 1),
+            "isSleep": is_sleep_cand,
+            "windows": windows
+        }
+
     def compute_natural_baseline(self, state):
         now = self.parse_time(state["now"])
         quota = state.get("quota", {})
         profile = state.get("userProfile", {})
         work_windows = profile.get("expectedWorkWindows", []) if profile else []
 
-        if quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
-            active_reset = self.parse_time(quota["resetAt"])
-            if active_reset > now:
-                eval_res = self.evaluate_window_utility(active_reset, profile, now)
-                return {
-                    "baselineType": "EXISTING_ACTIVE_WINDOW",
-                    "baselineTime": active_reset.strftime("%Y-%m-%d %H:%M"),
-                    "baselineUtility": round(eval_res["utility"], 1),
-                    "workCoverage": round(eval_res["workCoverage"], 1),
-                    "boundaryAlignment": round(eval_res["boundaryAlignment"], 1)
-                }
-
-        # Natural baseline is the sequence of natural usage without artificial warmup.
-        # If candidate is in the future (e.g. overnight wake for tomorrow's shift),
-        # the baseline against which that candidate must prove incremental benefit is the natural start of that work window!
-        # If user is currently in a work window, natural use is happening now, BUT for candidates scheduled in the future,
-        # we evaluate them against the future natural baseline.
-        next_work_start = None
-        for day_offset in range(3):
-            day_base = (now + timedelta(days=day_offset)).date()
-            for w in work_windows:
-                h, m = map(int, w[0].split(":"))
-                w_start_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
-                if w_start_dt >= now:
-                    if next_work_start is None or w_start_dt < next_work_start:
-                        next_work_start = w_start_dt
-
+        traj = self.evaluate_trajectory_utility(("NO_WARMUP", None), state)
         curr_weight = self.get_time_weight(now, profile)
-        if curr_weight >= 0.7:
-            eval_now = self.evaluate_window_utility(now, profile, now)
-            # Natural use happening now also has the immediate work urgency benefit without artificial warmup cost!
-            now_imm_bonus = 100.0 if curr_weight >= 0.7 else 40.0
-            base_now_util = eval_now["utility"] + now_imm_bonus
-            eval_next = self.evaluate_window_utility(next_work_start, profile, now) if next_work_start else None
-            return {
-                "baselineType": "NATURAL_USE_NOW",
-                "baselineTime": now.strftime("%Y-%m-%d %H:%M"),
-                "baselineUtility": round(base_now_util, 1),
-                "nextNaturalStart": next_work_start.strftime("%Y-%m-%d %H:%M") if next_work_start else None,
-                "nextNaturalUtility": round(eval_next["utility"], 1) if eval_next else 0.0,
-                "workCoverage": round(eval_now["workCoverage"], 1),
-                "boundaryAlignment": round(eval_now["boundaryAlignment"], 1)
-            }
 
         if not work_windows:
-            return {
-                "baselineType": "NO_EXPECTED_WORK",
-                "baselineTime": None,
-                "baselineUtility": 0.0,
-                "nextNaturalStart": None,
-                "nextNaturalUtility": 0.0,
-                "workCoverage": 0.0,
-                "boundaryAlignment": 0.0
-            }
-
-        if next_work_start is not None:
-            eval_res = self.evaluate_window_utility(next_work_start, profile, now)
-            return {
-                "baselineType": "NEXT_NATURAL_USE",
-                "baselineTime": next_work_start.strftime("%Y-%m-%d %H:%M"),
-                "baselineUtility": round(eval_res["utility"], 1),
-                "nextNaturalStart": next_work_start.strftime("%Y-%m-%d %H:%M"),
-                "nextNaturalUtility": round(eval_res["utility"], 1),
-                "workCoverage": round(eval_res["workCoverage"], 1),
-                "boundaryAlignment": round(eval_res["boundaryAlignment"], 1)
-            }
+            b_type = "NO_EXPECTED_WORK"
+            b_util = 0.0
+        elif quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
+            b_type = "EXISTING_ACTIVE_WINDOW"
+            b_util = traj["totalServedDemand"]
+        elif curr_weight >= 0.7:
+            b_type = "NATURAL_USE_NOW"
+            b_util = traj["totalServedDemand"]
+        else:
+            b_type = "NEXT_NATURAL_USE"
+            b_util = traj["totalServedDemand"]
 
         return {
-            "baselineType": "NO_EXPECTED_WORK",
-            "baselineTime": None,
-            "baselineUtility": 0.0,
-            "workCoverage": 0.0,
-            "boundaryAlignment": 0.0
+            "baselineType": b_type,
+            "baselineUtility": b_util,
+            "servedDemand": traj["totalServedDemand"],
+            "unservedDemand": traj["totalUnservedDemand"],
+            "windows": traj["windows"],
+            "trajectory": traj
         }
 
     def generate_candidates(self, state):
         now = self.parse_time(state["now"])
         candidates = set()
-
-        # 1. grid points across horizon
         end_time = now + timedelta(hours=self.horizon_hours)
         curr = now
         while curr <= end_time:
             candidates.add(curr)
             curr += timedelta(minutes=self.grid_step_min)
 
-        # 2. Add special points
-        # now
         candidates.add(now)
 
-        # known resetAt + 60s
         quota = state.get("quota", {})
         if quota.get("resetAt"):
             reset_at = self.parse_time(quota["resetAt"])
             if reset_at >= now:
                 candidates.add(reset_at + timedelta(seconds=60))
 
-        # Target work starts - 300m
         profile = state.get("userProfile", {})
         all_targets = []
         primary_start = profile.get("expectedPrimaryWorkStart")
@@ -248,21 +301,16 @@ class DecisionEngine:
                 if is_prim and (cand_opt1 + timedelta(minutes=5)) >= now:
                     candidates.add(cand_opt1 + timedelta(minutes=5))
 
-        # Filter out candidates strictly before now
-        valid_candidates = sorted([c for c in candidates if c >= now])
-        return valid_candidates
+        return sorted([c for c in candidates if c >= now])
 
     def score_candidate(self, t, state):
         now = self.parse_time(state["now"])
         quota = state.get("quota", {})
         device = state.get("device", {})
         profile = state.get("userProfile", {})
-        history = state.get("history", {})
 
-        # Validation Checks & Hard Exclusions
         if quota.get("weeklyBlocked"):
             return None, "Weekly quota blocked"
-
         if quota.get("fiveHourWindowStatus") == "BLOCKED":
             return None, "Quota window blocked"
 
@@ -273,81 +321,48 @@ class DecisionEngine:
         if is_sleep and not wake_available:
             return None, "WakeToRun unavailable during sleep"
 
-        # Check Redundant Penalty (inside existing active window)
-        active_reset = None
         if quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
             active_reset = self.parse_time(quota["resetAt"])
+            if active_reset.tzinfo is None and now.tzinfo is not None:
+                active_reset = active_reset.replace(tzinfo=now.tzinfo)
             if t < active_reset:
-                # Inside active window
                 return None, f"Inside active window until {active_reset.strftime('%H:%M')}"
 
-        # 1. Work Coverage & 2. Boundary Alignment via evaluate_window_utility
         eval_res = self.evaluate_window_utility(t, profile, now)
         raw_work_coverage = eval_res["workCoverage"]
         boundary_alignment_score = eval_res["boundaryAlignment"]
-        best_align_score = eval_res["bestAlignScore"]
         candidate_reset = t + timedelta(minutes=self.window_duration_min)
 
-        # 3. WakeBenefitScore (0-60)
-        # 3. WakeBenefitScore:
-        # Pre-work sleep wakeups do NOT generate artificial utility over natural morning start.
-        # Wake benefit is 0.0 unless there is a concrete daytime benefit that natural morning start cannot provide.
-        wake_benefit_score = 0.0
-
-        # 4. SleepDisruptionPenalty
-        sleep_disruption_penalty = 0.0
-        if is_sleep:
-            # penalize sleep disruption
-            sleep_disruption_penalty = self.p_sleep_base
-
-        # 5. WarmupCostPenalty
+        cand_traj = self.evaluate_trajectory_utility(("WARMUP_AT", t), state)
+        sleep_disruption_penalty = self.p_sleep_base if is_sleep else 0.0
         warmup_cost_penalty = self.w_cost
-
-        # 6. RiskPenalty
-        risk_penalty = 0.0
-        if quota.get("fiveHourWindowStatus") == "AMBIGUOUS":
-            risk_penalty += 300.0
-
-        # 3.5 Immediate Work Urgency Bonus
-        immediate_work_bonus = 0.0
-        if not is_sleep and (t - now).total_seconds() <= 300: # within 5 min of now
-            curr_weight = self.get_time_weight(now, profile)
-            if curr_weight >= 0.7:
-                immediate_work_bonus = 100.0
-            elif curr_weight >= 0.3:
-                immediate_work_bonus = 40.0
-
-        # Total Score with Temporal Discounting
-        # In rolling horizon, an immediate benefit is more certain than an action 20 hours away
-        hours_away = max(0.0, (t - now).total_seconds() / 3600.0)
-        temporal_discount = max(0.6, 1.0 - (hours_away * 0.02)) # 2% discount per hour into future, capped at 0.6
 
         base_score = (
             self.w_work * raw_work_coverage +
-            self.w_align * boundary_alignment_score +
-            self.w_wake * wake_benefit_score +
-            immediate_work_bonus -
+            self.w_align * boundary_alignment_score -
             sleep_disruption_penalty -
-            warmup_cost_penalty -
-            risk_penalty
+            warmup_cost_penalty
         )
-        total_score = base_score * temporal_discount
 
-        breakdown = {
+        return {
             "time": t.strftime("%Y-%m-%d %H:%M"),
             "candidate_dt": t,
             "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
-            "totalScore": round(total_score, 1),
+            "totalScore": round(base_score, 1),
+            "candidateUtility": cand_traj["totalServedDemand"],
+            "servedDemand": cand_traj["totalServedDemand"],
+            "unservedDemand": cand_traj["totalUnservedDemand"],
+            "trajectoryWindows": cand_traj["windows"],
             "workCoverage": round(raw_work_coverage, 1),
             "boundaryAlignment": round(boundary_alignment_score, 1),
-            "wakeBenefit": round(wake_benefit_score, 1),
-            "immediateBonus": round(immediate_work_bonus, 1),
-            "sleepDisruption": round(sleep_disruption_penalty, 1),
-            "warmupCost": round(warmup_cost_penalty, 1),
-            "risk": round(risk_penalty, 1),
+            "wakeBenefit": 0.0,
+            "immediateBonus": 0.0,
+            "sleepDisruption": sleep_disruption_penalty,
+            "warmupCost": warmup_cost_penalty,
+            "incrementalCosts": cand_traj["incrementalCosts"],
+            "risk": 0.0,
             "isSleep": is_sleep
-        }
-        return breakdown, "OK"
+        }, "OK"
 
     def plan_next_action(self, state):
         now = self.parse_time(state["now"])
@@ -357,35 +372,25 @@ class DecisionEngine:
         inc_thresh = self.min_incremental_benefit
 
         candidates = self.generate_candidates(state)
-        scored_candidates = []
+        scored = []
 
         for cand in candidates:
             breakdown, reason = self.score_candidate(cand, state)
             if breakdown is not None:
-                cand_dt = self.parse_time(breakdown["time"])
-                if cand_dt.tzinfo is None and now.tzinfo is not None:
-                    cand_dt = cand_dt.replace(tzinfo=now.tzinfo)
+                inc_benefit = round(breakdown["candidateUtility"] - b_util - breakdown["incrementalCosts"], 1)
 
-                # Determine effective baseline for this candidate
-                # If candidate is scheduled for the future (> 60m away) and a next natural work window exists,
-                # the relevant baseline is the utility of starting at that next natural work window.
-                effective_b_util = b_util
-                effective_b_type = b_type
-                if (cand_dt - now).total_seconds() > 3600 and baseline.get("nextNaturalUtility") is not None:
-                    effective_b_util = baseline["nextNaturalUtility"]
-                    effective_b_type = "NEXT_NATURAL_USE"
-
-                cand_util = breakdown["totalScore"]
-                inc_benefit = round(cand_util - effective_b_util, 1)
-                breakdown["baselineType"] = effective_b_type
-                breakdown["baselineUtility"] = effective_b_util
-                breakdown["candidateUtility"] = cand_util
+                breakdown["baselineType"] = b_type
+                breakdown["baselineUtility"] = b_util
                 breakdown["incrementalBenefit"] = inc_benefit
                 breakdown["incrementalThreshold"] = inc_thresh
-                scored_candidates.append(breakdown)
+                breakdown["baselineServedDemand"] = baseline["servedDemand"]
+                breakdown["baselineUnservedDemand"] = baseline["unservedDemand"]
+                breakdown["baselineWindows"] = baseline["windows"]
 
-        scored_candidates.sort(key=lambda x: x["incrementalBenefit"], reverse=True)
-        if not scored_candidates:
+                scored.append(breakdown)
+
+        scored.sort(key=lambda x: (x["incrementalBenefit"], x["totalScore"]), reverse=True)
+        if not scored:
             return {
                 "decision": "NO_ACTION",
                 "baselineType": b_type,
@@ -398,29 +403,12 @@ class DecisionEngine:
                 "topCandidates": []
             }
 
-        # remove candidate_dt before returning to keep output clean and json serializable
-        for item in scored_candidates:
+        for item in scored:
             if "candidate_dt" in item:
                 del item["candidate_dt"]
 
-        best = scored_candidates[0]
+        best = scored[0]
 
-        # Gate 1: Absolute usefulness check
-        if best["totalScore"] < self.min_useful_score:
-            return {
-                "decision": "NO_ACTION",
-                "baselineType": b_type,
-                "baselineUtility": b_util,
-                "candidateUtility": best["candidateUtility"],
-                "incrementalBenefit": best["incrementalBenefit"],
-                "incrementalThreshold": inc_thresh,
-                "score": best["incrementalBenefit"],
-                "reason": f"Best score ({best['totalScore']}) below minimum useful threshold ({self.min_useful_score})",
-                "breakdown": best,
-                "topCandidates": scored_candidates[:5]
-            }
-
-        # Gate 2: Incremental Benefit Semantic Gate over NO_WARMUP baseline
         if best["incrementalBenefit"] <= inc_thresh:
             return {
                 "decision": "NO_ACTION",
@@ -436,7 +424,7 @@ class DecisionEngine:
                     f"[incremental benefit: {best['incrementalBenefit']}]"
                 ),
                 "breakdown": best,
-                "topCandidates": scored_candidates[:5]
+                "topCandidates": scored[:5]
             }
 
         best_time = self.parse_time(best["time"])
@@ -459,7 +447,7 @@ class DecisionEngine:
                 f"over natural baseline '{b_type}' ({b_util})"
             ),
             "breakdown": best,
-            "topCandidates": scored_candidates[:5]
+            "topCandidates": scored[:5]
         }
 
 if __name__ == "__main__":
