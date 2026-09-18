@@ -25,16 +25,19 @@
     "timezone": "Asia/Shanghai",
     "expectedPrimaryWorkStart": "15:00"
   },
-  "demandProfile": [
-    {
-      "start": "15:00",
-      "end": "16:00",
-      "demand": 80.0
-    },
-    {
-      "start": "16:00",
-      "end": "20:00",
-      "demand": 80.0
-    }
-  ]
+  "demandProfile": {
+    "status": "CALIBRATED",
+    "bands": [
+      {
+        "start": "15:00",
+        "end": "16:00",
+        "demand": 80.0
+      },
+      {
+        "start": "16:00",
+        "end": "20:00",
+        "demand": 80.0
+      }
+    ]
+  }
 }

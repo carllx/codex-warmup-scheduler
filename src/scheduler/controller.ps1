@@ -54,6 +54,7 @@ try {
     $LogFile = Join-Path $LogsDir "warmup-$TodayStr.log"
     $StateFile = Join-Path $StateDir "runtime_state.json"
     $ProbeCacheFile = Join-Path $StateDir "probe_cache.json"
+    $QuotaObservationsFile = Join-Path $StateDir "quota_observations.jsonl"
 
     function Log-Message([string]$msg, [string]$level = "INFO") {
         $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
@@ -69,6 +70,7 @@ try {
     Import-Module (Join-Path $SchedulerDir "ScheduledTrigger.psm1") -Force
     Import-Module (Join-Path $RuntimeDir "ProcessRunner.psm1") -Force
     Import-Module (Join-Path $RuntimeDir "CodexWarmup.psm1") -Force
+    Import-Module (Join-Path $RuntimeDir "QuotaObservation.psm1") -Force
 
     # 1. Resolve Codex Executable
     . (Join-Path $RuntimeDir "Resolve-CodexRuntime.ps1")
@@ -136,6 +138,9 @@ try {
 
     $cls = $quota.Classification
     Log-Message "Rate Limits Classified: ordinaryUsageAllowed=$($cls.OrdinaryUsageAllowed), 5hStatus=$($cls.FiveHourWindowStatus), resetAnchor=$($cls.ResetAnchorStatus), weeklyBlocked=$($cls.WeeklyBlocked), resetsAt=$($cls.ResetAt), reason=$($cls.Reason)"
+
+    # Observational quota telemetry (strictly non-content, observational only)
+    Write-QuotaObservation -Classification $cls -RuntimeVersion $runtime.version -ObservationsPath $QuotaObservationsFile
 
     # Hard Gate 1: Check Quota Uncertainty / Ambiguity / Ordinary Usage Hard Gate
     if (-not $cls.CanEvaluateWarmup) {

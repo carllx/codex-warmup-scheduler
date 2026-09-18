@@ -34,8 +34,29 @@ class DecisionEngine:
         self.window_capacity = self.planning.get("windowCapacity", 100.0)
         self.warmup_consumption = self.planning.get("warmupConsumption", 1.0)
 
-        self.user_profile = self.config.get("userProfile", {})
-        self.demand_profile = self.config.get("demandProfile", [])
+        self.user_profile = self.config.get("userProfile") or {}
+        self.demand_profile_raw = self.config.get("demandProfile")
+        self.demand_status, self.demand_bands = self.parse_demand_profile(self.demand_profile_raw)
+
+    def parse_demand_profile(self, profile_input):
+        if profile_input is None:
+            return "UNKNOWN", []
+        if isinstance(profile_input, str):
+            status = profile_input.upper()
+            if status in ("UNKNOWN", "NO_DEMAND", "CALIBRATED"):
+                return status, []
+            return "UNKNOWN", []
+        if isinstance(profile_input, dict):
+            status = profile_input.get("status", "UNKNOWN").upper()
+            bands = profile_input.get("bands", [])
+            if status not in ("UNKNOWN", "NO_DEMAND", "CALIBRATED"):
+                status = "UNKNOWN"
+            return status, bands if isinstance(bands, list) else []
+        if isinstance(profile_input, list):
+            if len(profile_input) == 0:
+                return "UNKNOWN", []
+            return "CALIBRATED", profile_input
+        return "UNKNOWN", []
 
     def parse_time(self, t_str):
         if isinstance(t_str, datetime):
@@ -115,7 +136,13 @@ class DecisionEngine:
         profile = state.get("userProfile") or self.user_profile
         work_windows = profile.get("expectedWorkWindows", []) if profile else []
         sleep_windows = profile.get("sleepWindows", []) if profile else []
-        demand_profile = state.get("demandProfile") or profile.get("demandProfile") or self.demand_profile
+
+        raw_demand = state.get("demandProfile")
+        if raw_demand is None and profile:
+            raw_demand = profile.get("demandProfile")
+        if raw_demand is None:
+            raw_demand = self.demand_profile_raw
+        demand_status, demand_bands = self.parse_demand_profile(raw_demand)
 
         action_type, t_cand = policy_action
         warmup_cost = self.w_cost if (action_type == "WARMUP_AT" and t_cand is not None) else 0.0
@@ -153,8 +180,8 @@ class DecisionEngine:
 
             curr_hm = curr.strftime("%H:%M")
             step_demand = 0.0
-            if demand_profile:
-                for band in demand_profile:
+            if demand_status == "CALIBRATED":
+                for band in demand_bands:
                     b_s, b_e = band["start"], band["end"]
                     in_band = (b_s <= curr_hm < b_e) if b_s < b_e else (curr_hm >= b_s or curr_hm < b_e)
                     if in_band:
@@ -162,8 +189,6 @@ class DecisionEngine:
                         b_e_dt = datetime.strptime(b_e, "%H:%M") + (timedelta(days=1) if b_e <= b_s else timedelta(0))
                         steps = max(1.0, (b_e_dt - b_s_dt).total_seconds() / (60.0 * self.grid_step_min))
                         step_demand += band["demand"] / steps
-            elif any((w[0] <= curr_hm < w[1]) if w[0] < w[1] else (curr_hm >= w[0] or curr_hm < w[1]) for w in work_windows):
-                step_demand = 2.0
 
             total_demand += step_demand
             if step_demand > 0:
@@ -205,16 +230,27 @@ class DecisionEngine:
         profile = state.get("userProfile") or self.user_profile
         work_windows = profile.get("expectedWorkWindows", []) if profile else []
 
+        raw_demand = state.get("demandProfile")
+        if raw_demand is None and profile:
+            raw_demand = profile.get("demandProfile")
+        if raw_demand is None:
+            raw_demand = self.demand_profile_raw
+        demand_status, _ = self.parse_demand_profile(raw_demand)
+
         traj = self.evaluate_trajectory_utility(("NO_WARMUP", None), state)
         served_demand, total_demand = traj["totalServedDemand"], traj["totalDemand"]
         curr_weight = self.get_time_weight(now, profile)
 
         # Invariant: baselineUtility must always equal NO_WARMUP trajectory served demand when demand exists
-        if quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
+        if demand_status == "UNKNOWN":
+            b_type, b_util = "DEMAND_UNKNOWN", 0.0
+        elif demand_status == "NO_DEMAND":
+            b_type, b_util = "NO_EXPECTED_WORK", 0.0
+        elif quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
             b_type, b_util = "EXISTING_ACTIVE_WINDOW", served_demand
         elif curr_weight >= 0.7:
             b_type, b_util = "NATURAL_USE_NOW", served_demand
-        elif total_demand > 0 or work_windows:
+        elif total_demand > 0:
             b_type, b_util = "NEXT_NATURAL_USE", served_demand
         else:
             b_type, b_util = "NO_EXPECTED_WORK", 0.0
@@ -333,12 +369,34 @@ class DecisionEngine:
         now = self.parse_time(state["now"])
         if "userProfile" not in state and self.user_profile:
             state["userProfile"] = self.user_profile
-        if "demandProfile" not in state and self.demand_profile:
-            state["demandProfile"] = self.demand_profile
+
+        raw_demand = state.get("demandProfile")
+        if raw_demand is None and state.get("userProfile"):
+            raw_demand = state["userProfile"].get("demandProfile")
+        if raw_demand is None:
+            raw_demand = self.demand_profile_raw
+
+        demand_status, demand_bands = self.parse_demand_profile(raw_demand)
+        state["demandProfile"] = {"status": demand_status, "bands": demand_bands}
+
+        inc_thresh = self.min_incremental_benefit
+
+        if demand_status == "UNKNOWN":
+            return {
+                "decision": "NO_ACTION",
+                "baselineType": "DEMAND_UNKNOWN",
+                "baselineUtility": 0.0,
+                "candidateUtility": 0.0,
+                "incrementalBenefit": 0.0,
+                "incrementalThreshold": inc_thresh,
+                "score": 0.0,
+                "reason": "Quota demand is UNKNOWN; fail-closed prohibits scheduling warmup",
+                "breakdown": None,
+                "topCandidates": []
+            }
 
         baseline = self.compute_natural_baseline(state)
         b_type, b_util = baseline["baselineType"], baseline["baselineUtility"]
-        inc_thresh = self.min_incremental_benefit
 
         candidates = self.generate_candidates(state)
         scored = []
@@ -432,9 +490,9 @@ if __name__ == "__main__":
         },
         "device": {"wakeToRunAvailable": True, "state": "AWAKE"}
     }
-    if "userProfile" in engine.config:
+    if engine.config.get("userProfile"):
         state["userProfile"] = engine.config["userProfile"]
-    if "demandProfile" in engine.config:
+    if engine.config.get("demandProfile"):
         state["demandProfile"] = engine.config["demandProfile"]
 
     result = engine.plan_next_action(state)

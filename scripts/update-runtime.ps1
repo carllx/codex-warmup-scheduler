@@ -28,6 +28,7 @@ $filesToDeploy = @(
     "src\runtime\Execute-CodexWarmup.ps1",
     "src\runtime\ProcessRunner.psm1",
     "src\runtime\RateLimitClassifier.psm1",
+    "src\runtime\QuotaObservation.psm1",
     "src\scheduler\ScheduledTrigger.psm1",
     "src\scheduler\Update-ScheduledTrigger.ps1",
     "src\engine\decision_engine.py",

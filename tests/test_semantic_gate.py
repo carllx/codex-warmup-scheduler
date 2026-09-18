@@ -3,13 +3,16 @@ tests/test_semantic_gate.py
 Dedicated semantic gate regression suite for Decision Engine.
 Asserts:
 - S1: Artificial pre-work alignment (04:00 warmup for 09:00 work start) -> NO_ACTION
-- S2: Rest day (expectedWorkWindows = []) -> NO_ACTION with NO_EXPECTED_WORK baseline
+- S2: Rest day (NO_DEMAND) -> NO_ACTION with NO_EXPECTED_WORK baseline
 - S3: Near-term natural work (user starting work now) -> NO_ACTION over natural use
 - S4: Afternoon work alignment rejected -> deterministic NO_ACTION (identical available state from 15:00)
 - S5: True cross-reset capacity -> SCHEDULE_WARMUP at 11:00 (serves 160 vs baseline 100)
 - CLI Integration: S5 positive fixture through production CLI interface
 - CLI Integration: S4 negative fixture through production CLI interface
-- Invariant: baselineUtility matches servedDemand even when expectedWorkWindows is absent
+- CLI Integration: Production default config (UNKNOWN) fails closed with NO_ACTION
+- UNKNOWN demand status + expectedWorkWindows -> NO_ACTION, DEMAND_UNKNOWN, zero inferred quota demand
+- NO_DEMAND demand status -> NO_ACTION, NO_EXPECTED_WORK
+- Invariant: baselineUtility matches servedDemand when trajectory demand exists
 """
 
 import os
@@ -35,7 +38,7 @@ class TestSemanticGate(unittest.TestCase):
 
     def test_s1_artificial_pre_work_alignment_rejected(self):
         """
-        S1: User sleeps until 08:00, starts work at 09:00.
+        S1: User sleeps until 08:00, starts work at 09:00 with calibrated demand 40.
         Now is 21:00 previous day.
         A candidate at 04:00 (resetting at 09:00) must evaluate against natural baseline
         and yield NO_ACTION.
@@ -58,6 +61,12 @@ class TestSemanticGate(unittest.TestCase):
                 ],
                 "timezone": "Asia/Shanghai",
                 "expectedPrimaryWorkStart": "09:00"
+            },
+            "demandProfile": {
+                "status": "CALIBRATED",
+                "bands": [
+                    {"start": "09:00", "end": "12:30", "demand": 40.0}
+                ]
             }
         }
         plan = self.engine.plan_next_action(state)
@@ -70,7 +79,7 @@ class TestSemanticGate(unittest.TestCase):
 
     def test_s2_rest_day_no_expected_work(self):
         """
-        S2: Rest day where expectedWorkWindows is empty.
+        S2: Rest day where status is NO_DEMAND.
         Must report NO_EXPECTED_WORK baseline with 0.0 utility and decision NO_ACTION.
         """
         state = {
@@ -87,6 +96,9 @@ class TestSemanticGate(unittest.TestCase):
                 "expectedWorkWindows": [],
                 "timezone": "Asia/Shanghai",
                 "expectedPrimaryWorkStart": None
+            },
+            "demandProfile": {
+                "status": "NO_DEMAND"
             }
         }
         plan = self.engine.plan_next_action(state)
@@ -116,6 +128,12 @@ class TestSemanticGate(unittest.TestCase):
                 ],
                 "timezone": "Asia/Shanghai",
                 "expectedPrimaryWorkStart": "09:00"
+            },
+            "demandProfile": {
+                "status": "CALIBRATED",
+                "bands": [
+                    {"start": "09:00", "end": "12:30", "demand": 40.0}
+                ]
             }
         }
         plan = self.engine.plan_next_action(state)
@@ -125,9 +143,9 @@ class TestSemanticGate(unittest.TestCase):
 
     def test_s4_afternoon_work_alignment_rejected(self):
         """
-        S4: Expected work = 15:00–20:00.
-        NO_WARMUP: 15:00 natural use -> 15:00–20:00 window.
-        WARMUP_AT(10:00): 10:00 artificial window -> reset 15:00 -> 15:00 natural use -> 15:00–20:00 window.
+        S4: Expected work = 15:00–20:00 with calibrated demand 60.
+        NO_WARMUP: 15:00 natural use -> 15:00–20:00 window serves 60.
+        WARMUP_AT(10:00): 10:00 artificial window -> reset 15:00 -> 15:00 natural use -> 15:00–20:00 window serves 60.
         Since both yield identical available state from 15:00 onward, 10:00 warmup
         must not obtain positive incremental benefit merely because reset aligns with 15:00.
         Deterministically asserts NO_ACTION.
@@ -148,6 +166,12 @@ class TestSemanticGate(unittest.TestCase):
                 ],
                 "timezone": "Asia/Shanghai",
                 "expectedPrimaryWorkStart": "15:00"
+            },
+            "demandProfile": {
+                "status": "CALIBRATED",
+                "bands": [
+                    {"start": "15:00", "end": "20:00", "demand": 60.0}
+                ]
             }
         }
         plan = self.engine.plan_next_action(state)
@@ -193,10 +217,13 @@ class TestSemanticGate(unittest.TestCase):
                 "timezone": "Asia/Shanghai",
                 "expectedPrimaryWorkStart": "15:00"
             },
-            "demandProfile": [
-                {"start": "15:00", "end": "16:00", "demand": 80.0},
-                {"start": "16:00", "end": "20:00", "demand": 80.0}
-            ]
+            "demandProfile": {
+                "status": "CALIBRATED",
+                "bands": [
+                    {"start": "15:00", "end": "16:00", "demand": 80.0},
+                    {"start": "16:00", "end": "20:00", "demand": 80.0}
+                ]
+            }
         }
         plan = self.engine.plan_next_action(state)
         self.assertEqual(plan["decision"], "SCHEDULE_WARMUP")
@@ -254,6 +281,78 @@ class TestSemanticGate(unittest.TestCase):
         self.assertEqual(result["decision"], "NO_ACTION")
         self.assertLessEqual(result["incrementalBenefit"], 0.0)
 
+    def test_cli_production_default_config_is_unknown_and_fails_closed(self):
+        """
+        CLI integration test: runs decision_engine.py with repo config/default.json.
+        Verifies that because demandProfile.status is UNKNOWN, the production CLI
+        deterministically fails closed with NO_ACTION, DEMAND_UNKNOWN, and zero inferred demand.
+        """
+        script_path = os.path.join(project_root, "src", "engine", "decision_engine.py")
+        config_path = os.path.join(project_root, "config", "default.json")
+        cmd = [
+            sys.executable, script_path,
+            "--now", "2026-09-17T21:00:00+08:00",
+            "--config", config_path,
+            "--window-status", "INACTIVE"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = json.loads(proc.stdout)
+
+        self.assertEqual(result["decision"], "NO_ACTION")
+        self.assertEqual(result["baselineType"], "DEMAND_UNKNOWN")
+        self.assertEqual(result["baselineUtility"], 0.0)
+        self.assertEqual(result["candidateUtility"], 0.0)
+        self.assertEqual(result["incrementalBenefit"], 0.0)
+        self.assertIn("fail-closed", result["reason"])
+
+    def test_unknown_demand_fails_closed_no_action(self):
+        """
+        Proves:
+        UNKNOWN status + expectedWorkWindows != []
+        -> NO_ACTION
+        -> DEMAND_UNKNOWN
+        -> zero inferred quota demand
+        """
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-17T21:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "userProfile": {
+                "expectedWorkWindows": [["09:00", "12:30"], ["14:00", "19:00"]],
+                "expectedPrimaryWorkStart": "09:00"
+            },
+            "demandProfile": {"status": "UNKNOWN", "bands": []}
+        }
+        plan = self.engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+        self.assertEqual(plan["baselineUtility"], 0.0)
+        self.assertEqual(plan["candidateUtility"], 0.0)
+        self.assertEqual(plan["incrementalBenefit"], 0.0)
+        self.assertIn("fail-closed", plan["reason"])
+
+    def test_no_demand_status_yields_no_action(self):
+        """
+        Proves:
+        NO_DEMAND status
+        -> NO_ACTION
+        -> NO_EXPECTED_WORK baseline
+        """
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "userProfile": {
+                "expectedWorkWindows": [["09:00", "12:30"]],
+                "expectedPrimaryWorkStart": "09:00"
+            },
+            "demandProfile": {"status": "NO_DEMAND"}
+        }
+        plan = self.engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertEqual(plan["baselineType"], "NO_EXPECTED_WORK")
+        self.assertEqual(plan["baselineUtility"], 0.0)
+
     def test_baseline_utility_matches_served_demand_when_work_windows_absent(self):
         """
         Invariant test:
@@ -261,9 +360,12 @@ class TestSemanticGate(unittest.TestCase):
         when trajectory demand exists, even if userProfile.expectedWorkWindows is empty or absent.
         """
         engine = DecisionEngine({
-            "demandProfile": [
-                {"start": "15:00", "end": "20:00", "demand": 100.0}
-            ]
+            "demandProfile": {
+                "status": "CALIBRATED",
+                "bands": [
+                    {"start": "15:00", "end": "20:00", "demand": 100.0}
+                ]
+            }
         })
         state = {
             "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
