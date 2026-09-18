@@ -45,6 +45,8 @@ def run_simulation():
         print(f"\n[{name}]")
         print(f"Context: {desc}")
         print(f"Now: {state['now']} | Decision: {plan['decision']}")
+        print(f"  Baseline:          Type={plan.get('baselineType')} | Utility={plan.get('baselineUtility')}")
+        print(f"  Incremental:       Benefit={plan.get('incrementalBenefit')} | Threshold={plan.get('incrementalThreshold')}")
 
         if plan["decision"] != "NO_ACTION":
             print(f"  Chosen Time:       {plan['scheduledTime']}")

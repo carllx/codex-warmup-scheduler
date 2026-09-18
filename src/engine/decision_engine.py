@@ -29,6 +29,7 @@ class DecisionEngine:
         self.p_sleep_3rd = self.weights.get("sleepDisruptionThird", 100.0)
         self.p_redundant = self.weights.get("redundantPenalty", 1000.0)
         self.min_useful_score = self.weights.get("minimumUsefulScore", 30.0)
+        self.min_incremental_benefit = self.planning.get("minIncrementalBenefit", 15.0)
 
         self.horizon_hours = self.planning.get("horizonHours", 24)
         self.grid_step_min = self.planning.get("gridStepMinutes", 15)
@@ -81,6 +82,130 @@ class DecisionEngine:
                     return True
         return False
 
+    def evaluate_window_utility(self, t, profile, now=None):
+        if now is None:
+            now = t
+        window_end = t + timedelta(minutes=self.window_duration_min)
+        step_min = 15
+        step_weights = []
+        step_curr = t
+        while step_curr < window_end:
+            step_weights.append(self.get_time_weight(step_curr, profile))
+            step_curr += timedelta(minutes=step_min)
+        raw_work_coverage = (sum(step_weights) / len(step_weights) * 100.0) if step_weights else 0.0
+
+        candidate_reset = t + timedelta(minutes=self.window_duration_min)
+        best_align_score = 0.0
+        primary_start_str = profile.get("expectedPrimaryWorkStart") if profile else None
+        all_starts = []
+        if primary_start_str:
+            all_starts.append((primary_start_str, True))
+        for w in (profile.get("expectedWorkWindows", []) if profile else []):
+            all_starts.append((w[0], False))
+
+        for s_str, is_prim in all_starts:
+            h, m = map(int, s_str.split(":"))
+            for day_offset in range(3):
+                day_base = (now + timedelta(days=day_offset)).date()
+                target_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
+                diff_min = abs((candidate_reset - target_dt).total_seconds()) / 60.0
+                if is_prim:
+                    align = 100.0 if diff_min <= 5 else (90.0 if diff_min <= 15 else (75.0 if diff_min <= 30 else (50.0 if diff_min <= 60 else (20.0 if diff_min <= 120 else 0.0))))
+                else:
+                    align = 40.0 if diff_min <= 15 else (25.0 if diff_min <= 30 else (10.0 if diff_min <= 60 else 0.0))
+                if align > best_align_score:
+                    best_align_score = align
+
+        boundary_alignment_score = best_align_score
+        utility = self.w_work * raw_work_coverage + self.w_align * boundary_alignment_score
+        return {
+            "utility": utility,
+            "workCoverage": raw_work_coverage,
+            "boundaryAlignment": boundary_alignment_score,
+            "bestAlignScore": best_align_score
+        }
+
+    def compute_natural_baseline(self, state):
+        now = self.parse_time(state["now"])
+        quota = state.get("quota", {})
+        profile = state.get("userProfile", {})
+        work_windows = profile.get("expectedWorkWindows", []) if profile else []
+
+        if quota.get("fiveHourWindowStatus") == "ACTIVE" and quota.get("resetAt"):
+            active_reset = self.parse_time(quota["resetAt"])
+            if active_reset > now:
+                eval_res = self.evaluate_window_utility(active_reset, profile, now)
+                return {
+                    "baselineType": "EXISTING_ACTIVE_WINDOW",
+                    "baselineTime": active_reset.strftime("%Y-%m-%d %H:%M"),
+                    "baselineUtility": round(eval_res["utility"], 1),
+                    "workCoverage": round(eval_res["workCoverage"], 1),
+                    "boundaryAlignment": round(eval_res["boundaryAlignment"], 1)
+                }
+
+        # Natural baseline is the sequence of natural usage without artificial warmup.
+        # If candidate is in the future (e.g. overnight wake for tomorrow's shift),
+        # the baseline against which that candidate must prove incremental benefit is the natural start of that work window!
+        # If user is currently in a work window, natural use is happening now, BUT for candidates scheduled in the future,
+        # we evaluate them against the future natural baseline.
+        next_work_start = None
+        for day_offset in range(3):
+            day_base = (now + timedelta(days=day_offset)).date()
+            for w in work_windows:
+                h, m = map(int, w[0].split(":"))
+                w_start_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
+                if w_start_dt >= now:
+                    if next_work_start is None or w_start_dt < next_work_start:
+                        next_work_start = w_start_dt
+
+        curr_weight = self.get_time_weight(now, profile)
+        if curr_weight >= 0.7:
+            eval_now = self.evaluate_window_utility(now, profile, now)
+            # Natural use happening now also has the immediate work urgency benefit without artificial warmup cost!
+            now_imm_bonus = 100.0 if curr_weight >= 0.7 else 40.0
+            base_now_util = eval_now["utility"] + now_imm_bonus
+            eval_next = self.evaluate_window_utility(next_work_start, profile, now) if next_work_start else None
+            return {
+                "baselineType": "NATURAL_USE_NOW",
+                "baselineTime": now.strftime("%Y-%m-%d %H:%M"),
+                "baselineUtility": round(base_now_util, 1),
+                "nextNaturalStart": next_work_start.strftime("%Y-%m-%d %H:%M") if next_work_start else None,
+                "nextNaturalUtility": round(eval_next["utility"], 1) if eval_next else 0.0,
+                "workCoverage": round(eval_now["workCoverage"], 1),
+                "boundaryAlignment": round(eval_now["boundaryAlignment"], 1)
+            }
+
+        if not work_windows:
+            return {
+                "baselineType": "NO_EXPECTED_WORK",
+                "baselineTime": None,
+                "baselineUtility": 0.0,
+                "nextNaturalStart": None,
+                "nextNaturalUtility": 0.0,
+                "workCoverage": 0.0,
+                "boundaryAlignment": 0.0
+            }
+
+        if next_work_start is not None:
+            eval_res = self.evaluate_window_utility(next_work_start, profile, now)
+            return {
+                "baselineType": "NEXT_NATURAL_USE",
+                "baselineTime": next_work_start.strftime("%Y-%m-%d %H:%M"),
+                "baselineUtility": round(eval_res["utility"], 1),
+                "nextNaturalStart": next_work_start.strftime("%Y-%m-%d %H:%M"),
+                "nextNaturalUtility": round(eval_res["utility"], 1),
+                "workCoverage": round(eval_res["workCoverage"], 1),
+                "boundaryAlignment": round(eval_res["boundaryAlignment"], 1)
+            }
+
+        return {
+            "baselineType": "NO_EXPECTED_WORK",
+            "baselineTime": None,
+            "baselineUtility": 0.0,
+            "workCoverage": 0.0,
+            "boundaryAlignment": 0.0
+        }
+
     def generate_candidates(self, state):
         now = self.parse_time(state["now"])
         candidates = set()
@@ -105,30 +230,23 @@ class DecisionEngine:
 
         # Target work starts - 300m
         profile = state.get("userProfile", {})
+        all_targets = []
         primary_start = profile.get("expectedPrimaryWorkStart")
         if primary_start:
-            # Anchor to today or tomorrow's primary work start
-            for day_offset in range(2):
-                day_base = (now + timedelta(days=day_offset)).date()
-                h, m = map(int, primary_start.split(":"))
-                target_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
-                cand_opt1 = target_dt - timedelta(minutes=self.window_duration_min)
-                cand_opt2 = cand_opt1 + timedelta(minutes=5)
-                if cand_opt1 >= now:
-                    candidates.add(cand_opt1)
-                if cand_opt2 >= now:
-                    candidates.add(cand_opt2)
-
-        # Secondary work windows
+            all_targets.append((primary_start, True))
         for w in profile.get("expectedWorkWindows", []):
-            start_str = w[0]
+            all_targets.append((w[0], False))
+
+        for start_str, is_prim in all_targets:
             for day_offset in range(2):
                 day_base = (now + timedelta(days=day_offset)).date()
                 h, m = map(int, start_str.split(":"))
-                sec_target = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
-                cand = sec_target - timedelta(minutes=self.window_duration_min)
-                if cand >= now:
-                    candidates.add(cand)
+                target_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
+                cand_opt1 = target_dt - timedelta(minutes=self.window_duration_min)
+                if cand_opt1 >= now:
+                    candidates.add(cand_opt1)
+                if is_prim and (cand_opt1 + timedelta(minutes=5)) >= now:
+                    candidates.add(cand_opt1 + timedelta(minutes=5))
 
         # Filter out candidates strictly before now
         valid_candidates = sorted([c for c in candidates if c >= now])
@@ -163,89 +281,23 @@ class DecisionEngine:
                 # Inside active window
                 return None, f"Inside active window until {active_reset.strftime('%H:%M')}"
 
-        # 1. WorkCoverageScore (0-100)
-        # 5h window from t to t + 300m
-        window_end = t + timedelta(minutes=self.window_duration_min)
-        step_min = 15
-        total_steps = self.window_duration_min // step_min
-        step_weights = []
-        step_curr = t
-        while step_curr < window_end:
-            step_weights.append(self.get_time_weight(step_curr, profile))
-            step_curr += timedelta(minutes=step_min)
-        
-        avg_weight = sum(step_weights) / len(step_weights) if step_weights else 0
-        raw_work_coverage = avg_weight * 100.0
-
-        # 2. BoundaryAlignmentScore (0-100)
-        # candidate reset boundary = t + 300m
+        # 1. Work Coverage & 2. Boundary Alignment via evaluate_window_utility
+        eval_res = self.evaluate_window_utility(t, profile, now)
+        raw_work_coverage = eval_res["workCoverage"]
+        boundary_alignment_score = eval_res["boundaryAlignment"]
+        best_align_score = eval_res["bestAlignScore"]
         candidate_reset = t + timedelta(minutes=self.window_duration_min)
-        primary_start_str = profile.get("expectedPrimaryWorkStart")
-        
-        best_align_score = 0.0
-        if primary_start_str:
-            # find closest primary work start
-            for day_offset in range(3):
-                day_base = (now + timedelta(days=day_offset)).date()
-                h, m = map(int, primary_start_str.split(":"))
-                target_dt = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
-                diff_min = abs((candidate_reset - target_dt).total_seconds()) / 60.0
-                
-                if diff_min <= 5:
-                    align = 100.0
-                elif diff_min <= 15:
-                    align = 90.0
-                elif diff_min <= 30:
-                    align = 75.0
-                elif diff_min <= 60:
-                    align = 50.0
-                elif diff_min <= 120:
-                    align = 20.0
-                else:
-                    align = 0.0
-                
-                if align > best_align_score:
-                    best_align_score = align
-
-        # Secondary work windows boundary alignment
-        best_sec_align = 0.0
-        for w in profile.get("expectedWorkWindows", []):
-            start_str = w[0]
-            for day_offset in range(3):
-                day_base = (now + timedelta(days=day_offset)).date()
-                h, m = map(int, start_str.split(":"))
-                sec_target = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
-                diff_min = abs((candidate_reset - sec_target).total_seconds()) / 60.0
-                if diff_min <= 15:
-                    sec_align = 40.0
-                elif diff_min <= 30:
-                    sec_align = 25.0
-                elif diff_min <= 60:
-                    sec_align = 10.0
-                else:
-                    sec_align = 0.0
-                if sec_align > best_sec_align:
-                    best_sec_align = sec_align
-
-        boundary_alignment_score = max(best_align_score, best_sec_align)
 
         # 3. WakeBenefitScore (0-60)
-        # Granted only if warmup is during sleep AND reset boundary improves daytime start
+        # 3. WakeBenefitScore:
+        # Pre-work sleep wakeups do NOT generate artificial utility over natural morning start.
+        # Wake benefit is 0.0 unless there is a concrete daytime benefit that natural morning start cannot provide.
         wake_benefit_score = 0.0
-        if is_sleep and wake_available:
-            if best_align_score >= 90.0:
-                wake_benefit_score = 60.0
-            elif best_align_score >= 75.0:
-                wake_benefit_score = 45.0
-            elif best_align_score >= 50.0:
-                wake_benefit_score = 25.0
-            else:
-                wake_benefit_score = 0.0
 
         # 4. SleepDisruptionPenalty
         sleep_disruption_penalty = 0.0
         if is_sleep:
-            # check how many wakes have occurred or planned in this sleep period
+            # penalize sleep disruption
             sleep_disruption_penalty = self.p_sleep_base
 
         # 5. WarmupCostPenalty
@@ -257,14 +309,10 @@ class DecisionEngine:
             risk_penalty += 300.0
 
         # 3.5 Immediate Work Urgency Bonus
-        # If user is currently awake, not in sleep, and candidate is immediate (now),
-        # and work window is currently active or starting soon (within 60m),
-        # prioritize taking immediate action over waiting for tomorrow's sleep wake
         immediate_work_bonus = 0.0
         if not is_sleep and (t - now).total_seconds() <= 300: # within 5 min of now
             curr_weight = self.get_time_weight(now, profile)
             if curr_weight >= 0.7:
-                # Work has already started or is starting right now!
                 immediate_work_bonus = 100.0
             elif curr_weight >= 0.3:
                 immediate_work_bonus = 40.0
@@ -302,20 +350,50 @@ class DecisionEngine:
         return breakdown, "OK"
 
     def plan_next_action(self, state):
+        now = self.parse_time(state["now"])
+        baseline = self.compute_natural_baseline(state)
+        b_type = baseline["baselineType"]
+        b_util = baseline["baselineUtility"]
+        inc_thresh = self.min_incremental_benefit
+
         candidates = self.generate_candidates(state)
         scored_candidates = []
 
         for cand in candidates:
             breakdown, reason = self.score_candidate(cand, state)
             if breakdown is not None:
+                cand_dt = self.parse_time(breakdown["time"])
+                if cand_dt.tzinfo is None and now.tzinfo is not None:
+                    cand_dt = cand_dt.replace(tzinfo=now.tzinfo)
+
+                # Determine effective baseline for this candidate
+                # If candidate is scheduled for the future (> 60m away) and a next natural work window exists,
+                # the relevant baseline is the utility of starting at that next natural work window.
+                effective_b_util = b_util
+                effective_b_type = b_type
+                if (cand_dt - now).total_seconds() > 3600 and baseline.get("nextNaturalUtility") is not None:
+                    effective_b_util = baseline["nextNaturalUtility"]
+                    effective_b_type = "NEXT_NATURAL_USE"
+
+                cand_util = breakdown["totalScore"]
+                inc_benefit = round(cand_util - effective_b_util, 1)
+                breakdown["baselineType"] = effective_b_type
+                breakdown["baselineUtility"] = effective_b_util
+                breakdown["candidateUtility"] = cand_util
+                breakdown["incrementalBenefit"] = inc_benefit
+                breakdown["incrementalThreshold"] = inc_thresh
                 scored_candidates.append(breakdown)
 
-        scored_candidates.sort(key=lambda x: x["totalScore"], reverse=True)
-
-        now = self.parse_time(state["now"])
+        scored_candidates.sort(key=lambda x: x["incrementalBenefit"], reverse=True)
         if not scored_candidates:
             return {
                 "decision": "NO_ACTION",
+                "baselineType": b_type,
+                "baselineUtility": b_util,
+                "candidateUtility": 0.0,
+                "incrementalBenefit": round(0.0 - b_util, 1),
+                "incrementalThreshold": inc_thresh,
+                "score": round(0.0 - b_util, 1),
                 "reason": "No valid candidates found",
                 "topCandidates": []
             }
@@ -326,10 +404,38 @@ class DecisionEngine:
                 del item["candidate_dt"]
 
         best = scored_candidates[0]
+
+        # Gate 1: Absolute usefulness check
         if best["totalScore"] < self.min_useful_score:
             return {
                 "decision": "NO_ACTION",
+                "baselineType": b_type,
+                "baselineUtility": b_util,
+                "candidateUtility": best["candidateUtility"],
+                "incrementalBenefit": best["incrementalBenefit"],
+                "incrementalThreshold": inc_thresh,
+                "score": best["incrementalBenefit"],
                 "reason": f"Best score ({best['totalScore']}) below minimum useful threshold ({self.min_useful_score})",
+                "breakdown": best,
+                "topCandidates": scored_candidates[:5]
+            }
+
+        # Gate 2: Incremental Benefit Semantic Gate over NO_WARMUP baseline
+        if best["incrementalBenefit"] <= inc_thresh:
+            return {
+                "decision": "NO_ACTION",
+                "baselineType": b_type,
+                "baselineUtility": b_util,
+                "candidateUtility": best["candidateUtility"],
+                "incrementalBenefit": best["incrementalBenefit"],
+                "incrementalThreshold": inc_thresh,
+                "score": best["incrementalBenefit"],
+                "reason": (
+                    f"Candidate utility ({best['candidateUtility']}) does not exceed "
+                    f"natural baseline '{b_type}' ({b_util}) by threshold ({inc_thresh}) "
+                    f"[incremental benefit: {best['incrementalBenefit']}]"
+                ),
+                "breakdown": best,
                 "topCandidates": scored_candidates[:5]
             }
 
@@ -340,9 +446,18 @@ class DecisionEngine:
 
         return {
             "decision": "WARMUP_NOW" if is_immediate else "SCHEDULE_WARMUP",
+            "baselineType": b_type,
+            "baselineUtility": b_util,
+            "candidateUtility": best["candidateUtility"],
+            "incrementalBenefit": best["incrementalBenefit"],
+            "incrementalThreshold": inc_thresh,
             "scheduledTime": best["time"],
             "expectedBoundary": best["expectedBoundary"],
             "score": best["totalScore"],
+            "reason": (
+                f"Candidate delivers positive incremental benefit ({best['incrementalBenefit']}) "
+                f"over natural baseline '{b_type}' ({b_util})"
+            ),
             "breakdown": best,
             "topCandidates": scored_candidates[:5]
         }
