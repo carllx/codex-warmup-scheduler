@@ -19,43 +19,53 @@ class DecisionEngine:
         self.planning = config.get("planning", {})
         self.user_value_weights = config.get("userValueWeights", [])
 
-        # Default weights
-        self.w_work = self.weights.get("workCoverage", 0.8)
-        self.w_align = self.weights.get("boundaryAlignment", 1.2)
-        self.w_wake = self.weights.get("wakeBenefit", 1.0)
-        self.w_cost = self.weights.get("warmupCost", 5.0)
+        # Default weights & planning parameters
+        self.w_work, self.w_align = self.weights.get("workCoverage", 0.8), self.weights.get("boundaryAlignment", 1.2)
+        self.w_wake, self.w_cost = self.weights.get("wakeBenefit", 1.0), self.weights.get("warmupCost", 5.0)
         self.p_sleep_base = self.weights.get("sleepDisruptionBase", 10.0)
         self.min_useful_score = self.weights.get("minimumUsefulScore", 30.0)
-        self.min_incremental_benefit = self.planning.get("minIncrementalBenefit", 15.0)
-
-        self.horizon_hours = self.planning.get("horizonHours", 24)
-        self.grid_step_min = self.planning.get("gridStepMinutes", 15)
-        self.window_duration_min = self.planning.get("windowDurationMin", 300)
-        self.window_capacity = self.planning.get("windowCapacity", 100.0)
-        self.warmup_consumption = self.planning.get("warmupConsumption", 1.0)
-
+        self.min_incremental_benefit, self.horizon_hours = self.planning.get("minIncrementalBenefit", 15.0), self.planning.get("horizonHours", 24)
+        self.grid_step_min, self.window_duration_min = self.planning.get("gridStepMinutes", 15), self.planning.get("windowDurationMin", 300)
+        self.window_capacity, self.warmup_consumption = self.planning.get("windowCapacity", 100.0), self.planning.get("warmupConsumption", 1.0)
         self.user_profile = self.config.get("userProfile") or {}
         self.demand_profile_raw = self.config.get("demandProfile")
         self.demand_status, self.demand_bands = self.parse_demand_profile(self.demand_profile_raw)
 
+    def _is_valid_hhmm(self, val):
+        try:
+            return isinstance(val, str) and len(val) == 5 and val[2] == ":" and 0 <= int(val[:2]) < 24 and 0 <= int(val[3:]) < 60
+        except ValueError:
+            return False
+
+    def _validate_demand_bands(self, bands):
+        if not isinstance(bands, list) or len(bands) == 0:
+            return None
+        valid = []
+        for b in bands:
+            if not isinstance(b, dict):
+                return None
+            s, e, d = b.get("start"), b.get("end"), b.get("demand")
+            if not self._is_valid_hhmm(s) or not self._is_valid_hhmm(e):
+                return None
+            if not isinstance(d, (int, float)) or isinstance(d, bool) or d < 0 or d != d or d in (float("inf"), float("-inf")):
+                return None
+            valid.append({"start": s, "end": e, "demand": float(d)})
+        return valid
+
     def parse_demand_profile(self, profile_input):
-        if profile_input is None:
-            return "UNKNOWN", []
-        if isinstance(profile_input, str):
-            status = profile_input.upper()
-            if status in ("UNKNOWN", "NO_DEMAND", "CALIBRATED"):
-                return status, []
-            return "UNKNOWN", []
+        if isinstance(profile_input, str) and profile_input.upper() == "NO_DEMAND":
+            return "NO_DEMAND", []
         if isinstance(profile_input, dict):
-            status = profile_input.get("status", "UNKNOWN").upper()
-            bands = profile_input.get("bands", [])
-            if status not in ("UNKNOWN", "NO_DEMAND", "CALIBRATED"):
-                status = "UNKNOWN"
-            return status, bands if isinstance(bands, list) else []
+            status = str(profile_input.get("status", "UNKNOWN")).upper()
+            if status == "NO_DEMAND":
+                return "NO_DEMAND", []
+            if status == "CALIBRATED":
+                valid = self._validate_demand_bands(profile_input.get("bands"))
+                return ("CALIBRATED", valid) if valid else ("UNKNOWN", [])
+            return "UNKNOWN", []
         if isinstance(profile_input, list):
-            if len(profile_input) == 0:
-                return "UNKNOWN", []
-            return "CALIBRATED", profile_input
+            valid = self._validate_demand_bands(profile_input)
+            return ("CALIBRATED", valid) if valid else ("UNKNOWN", [])
         return "UNKNOWN", []
 
     def parse_time(self, t_str):
@@ -383,16 +393,11 @@ class DecisionEngine:
 
         if demand_status == "UNKNOWN":
             return {
-                "decision": "NO_ACTION",
-                "baselineType": "DEMAND_UNKNOWN",
-                "baselineUtility": 0.0,
-                "candidateUtility": 0.0,
-                "incrementalBenefit": 0.0,
-                "incrementalThreshold": inc_thresh,
-                "score": 0.0,
+                "decision": "NO_ACTION", "baselineType": "DEMAND_UNKNOWN",
+                "baselineUtility": 0.0, "candidateUtility": 0.0, "incrementalBenefit": 0.0,
+                "incrementalThreshold": inc_thresh, "score": 0.0,
                 "reason": "Quota demand is UNKNOWN; fail-closed prohibits scheduling warmup",
-                "breakdown": None,
-                "topCandidates": []
+                "breakdown": None, "topCandidates": []
             }
 
         baseline = self.compute_natural_baseline(state)
@@ -474,19 +479,16 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True, help="Path to config.json")
     parser.add_argument("--active-until", type=str, default=None, help="Active window expiry ISO timestamp")
     parser.add_argument("--weekly-exhausted", action="store_true", help="Whether weekly quota is exhausted")
-    parser.add_argument("--window-status", type=str, default=None, choices=["ACTIVE", "INACTIVE", "AMBIGUOUS", "BLOCKED"], help="Window status")
+    parser.add_argument("--window-status", type=str, default=None, choices=["ACTIVE", "INACTIVE", "AMBIGUOUS", "BLOCKED"])
     args = parser.parse_args()
 
     engine = DecisionEngine(config_path=args.config)
     window_status = args.window_status or ("ACTIVE" if args.active_until else "INACTIVE")
-
     state = {
         "now": args.now,
         "quota": {
-            "resetAt": args.active_until,
-            "weeklyBlocked": args.weekly_exhausted,
-            "fiveHourWindowStatus": window_status,
-            "windowDurationMinutes": 300
+            "resetAt": args.active_until, "weeklyBlocked": args.weekly_exhausted,
+            "fiveHourWindowStatus": window_status, "windowDurationMinutes": 300
         },
         "device": {"wakeToRunAvailable": True, "state": "AWAKE"}
     }
@@ -495,5 +497,4 @@ if __name__ == "__main__":
     if engine.config.get("demandProfile"):
         state["demandProfile"] = engine.config["demandProfile"]
 
-    result = engine.plan_next_action(state)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(engine.plan_next_action(state), ensure_ascii=False, indent=2))

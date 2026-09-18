@@ -378,5 +378,119 @@ class TestSemanticGate(unittest.TestCase):
         self.assertEqual(baseline["baselineUtility"], baseline["servedDemand"])
         self.assertNotEqual(baseline["baselineType"], "NO_EXPECTED_WORK")
 
+    def test_malformed_string_calibrated_fails_closed(self):
+        """
+        Proves:
+        profile_input = "CALIBRATED" (without bands)
+        -> fail-closed to UNKNOWN
+        -> NO_ACTION, DEMAND_UNKNOWN
+        """
+        engine = DecisionEngine({"demandProfile": "CALIBRATED"})
+        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_bands, [])
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "demandProfile": "CALIBRATED"
+        }
+        plan = engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+
+    def test_calibrated_empty_bands_fails_closed(self):
+        """
+        Proves:
+        {"status": "CALIBRATED", "bands": []}
+        -> fail-closed to UNKNOWN
+        -> NO_ACTION, DEMAND_UNKNOWN
+        """
+        engine = DecisionEngine({"demandProfile": {"status": "CALIBRATED", "bands": []}})
+        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_bands, [])
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "demandProfile": {"status": "CALIBRATED", "bands": []}
+        }
+        plan = engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+
+    def test_calibrated_malformed_band_fails_closed_no_exception(self):
+        """
+        Proves:
+        {"status": "CALIBRATED", "bands": [{"start": "15:00"}]} (missing end and demand)
+        or negative demand, or invalid HH:MM
+        -> fail-closed to UNKNOWN without raising an exception
+        -> NO_ACTION, DEMAND_UNKNOWN
+        """
+        malformed_inputs = [
+            {"status": "CALIBRATED", "bands": [{"start": "15:00"}]},
+            {"status": "CALIBRATED", "bands": [{"start": "15:00", "end": "20:00"}]},
+            {"status": "CALIBRATED", "bands": [{"start": "99:99", "end": "20:00", "demand": 10.0}]},
+            {"status": "CALIBRATED", "bands": [{"start": "15:00", "end": "20:00", "demand": -5.0}]},
+            {"status": "CALIBRATED", "bands": [{"start": "15:00", "end": "20:00", "demand": "invalid"}]},
+            {"status": "CALIBRATED", "bands": ["not-a-dict"]}
+        ]
+        for bad_prof in malformed_inputs:
+            engine = DecisionEngine({"demandProfile": bad_prof})
+            self.assertEqual(engine.demand_status, "UNKNOWN")
+            self.assertEqual(engine.demand_bands, [])
+            state = {
+                "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+                "now": "2026-09-18T08:00:00+08:00",
+                "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+                "demandProfile": bad_prof
+            }
+            plan = engine.plan_next_action(state)
+            self.assertEqual(plan["decision"], "NO_ACTION")
+            self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+
+    def test_legacy_malformed_direct_list_fails_closed(self):
+        """
+        Proves:
+        Legacy direct list with malformed band:
+        -> fail-closed to UNKNOWN
+        -> NO_ACTION, DEMAND_UNKNOWN
+        """
+        engine = DecisionEngine({"demandProfile": [{"start": "invalid"}]})
+        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_bands, [])
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "demandProfile": [{"start": "invalid"}]
+        }
+        plan = engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "NO_ACTION")
+        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+
+    def test_unknown_and_no_demand_ignore_accidental_bands(self):
+        """
+        Proves:
+        UNKNOWN or NO_DEMAND status with accidental bands present
+        -> bands are ignored, returning empty bands []
+        """
+        engine_no_demand = DecisionEngine({
+            "demandProfile": {
+                "status": "NO_DEMAND",
+                "bands": [{"start": "15:00", "end": "20:00", "demand": 50.0}]
+            }
+        })
+        self.assertEqual(engine_no_demand.demand_status, "NO_DEMAND")
+        self.assertEqual(engine_no_demand.demand_bands, [])
+
+        engine_unknown = DecisionEngine({
+            "demandProfile": {
+                "status": "UNKNOWN",
+                "bands": [{"start": "15:00", "end": "20:00", "demand": 50.0}]
+            }
+        })
+        self.assertEqual(engine_unknown.demand_status, "UNKNOWN")
+        self.assertEqual(engine_unknown.demand_bands, [])
+
 if __name__ == "__main__":
     unittest.main()
