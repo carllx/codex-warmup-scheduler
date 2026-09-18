@@ -7,11 +7,15 @@ Asserts:
 - S3: Near-term natural work (user starting work now) -> NO_ACTION over natural use
 - S4: Afternoon work alignment rejected -> deterministic NO_ACTION (identical available state from 15:00)
 - S5: True cross-reset capacity -> SCHEDULE_WARMUP at 11:00 (serves 160 vs baseline 100)
+- CLI Integration: S5 positive fixture through production CLI interface
+- CLI Integration: S4 negative fixture through production CLI interface
+- Invariant: baselineUtility matches servedDemand even when expectedWorkWindows is absent
 """
 
 import os
 import sys
 import json
+import subprocess
 import unittest
 
 # Path setup
@@ -203,6 +207,74 @@ class TestSemanticGate(unittest.TestCase):
         self.assertEqual(plan["breakdown"]["baselineServedDemand"], 100.0)
         self.assertEqual(plan["breakdown"]["baselineUnservedDemand"], 60.0)
         self.assertEqual(plan["incrementalBenefit"], 55.0)
+
+    def test_cli_s5_true_cross_reset_capacity(self):
+        """
+        CLI integration test: runs decision_engine.py via CLI with config fixture containing S5 demand profile.
+        Verifies:
+        - NO_WARMUP served = 100
+        - WARMUP candidate served = 160
+        - net incremental benefit = 55
+        - decision = SCHEDULE_WARMUP at 11:00
+        """
+        script_path = os.path.join(project_root, "src", "engine", "decision_engine.py")
+        config_path = os.path.join(project_root, "tests", "fixtures", "config_s5_cross_reset.json")
+        cmd = [
+            sys.executable, script_path,
+            "--now", "2026-09-18T08:00:00+08:00",
+            "--config", config_path,
+            "--window-status", "INACTIVE"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = json.loads(proc.stdout)
+
+        self.assertEqual(result["decision"], "SCHEDULE_WARMUP")
+        self.assertIn("11:00", result["scheduledTime"])
+        self.assertEqual(result["breakdown"]["baselineServedDemand"], 100.0)
+        self.assertEqual(result["breakdown"]["servedDemand"], 160.0)
+        self.assertEqual(result["incrementalBenefit"], 55.0)
+        self.assertGreater(result["score"], 30.0) # passes minimumUsefulScore gate
+
+    def test_cli_s4_false_alignment_rejected(self):
+        """
+        CLI integration test: runs decision_engine.py via CLI with config fixture for S4.
+        Verifies that S4 remains NO_ACTION over the CLI interface.
+        """
+        script_path = os.path.join(project_root, "src", "engine", "decision_engine.py")
+        config_path = os.path.join(project_root, "tests", "fixtures", "config_s4_false_alignment.json")
+        cmd = [
+            sys.executable, script_path,
+            "--now", "2026-09-17T21:00:00+08:00",
+            "--config", config_path,
+            "--window-status", "INACTIVE"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = json.loads(proc.stdout)
+
+        self.assertEqual(result["decision"], "NO_ACTION")
+        self.assertLessEqual(result["incrementalBenefit"], 0.0)
+
+    def test_baseline_utility_matches_served_demand_when_work_windows_absent(self):
+        """
+        Invariant test:
+        baselineUtility must always equal the NO_WARMUP trajectory's actual served-demand utility
+        when trajectory demand exists, even if userProfile.expectedWorkWindows is empty or absent.
+        """
+        engine = DecisionEngine({
+            "demandProfile": [
+                {"start": "15:00", "end": "20:00", "demand": 100.0}
+            ]
+        })
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-18T08:00:00+08:00",
+            "quota": {"resetAt": None, "weeklyBlocked": False, "fiveHourWindowStatus": "INACTIVE"},
+            "userProfile": {"expectedWorkWindows": []} # empty work windows
+        }
+        baseline = engine.compute_natural_baseline(state)
+        self.assertGreater(baseline["servedDemand"], 0.0)
+        self.assertEqual(baseline["baselineUtility"], baseline["servedDemand"])
+        self.assertNotEqual(baseline["baselineType"], "NO_EXPECTED_WORK")
 
 if __name__ == "__main__":
     unittest.main()

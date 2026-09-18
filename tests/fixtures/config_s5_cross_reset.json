@@ -1,0 +1,40 @@
+{
+  "planning": {
+    "gridStepMinutes": 15,
+    "horizonHours": 24,
+    "windowDurationMin": 300,
+    "minIncrementalBenefit": 15.0,
+    "windowCapacity": 100.0,
+    "warmupConsumption": 1.0
+  },
+  "weights": {
+    "minimumUsefulScore": 30.0,
+    "boundaryAlignment": 1.2,
+    "sleepDisruptionBase": 10.0,
+    "wakeBenefit": 1.0,
+    "workCoverage": 0.8,
+    "warmupCost": 5.0
+  },
+  "userProfile": {
+    "sleepWindows": [
+      ["01:30", "08:00"]
+    ],
+    "expectedWorkWindows": [
+      ["15:00", "20:00"]
+    ],
+    "timezone": "Asia/Shanghai",
+    "expectedPrimaryWorkStart": "15:00"
+  },
+  "demandProfile": [
+    {
+      "start": "15:00",
+      "end": "16:00",
+      "demand": 80.0
+    },
+    {
+      "start": "16:00",
+      "end": "20:00",
+      "demand": 80.0
+    }
+  ]
+}

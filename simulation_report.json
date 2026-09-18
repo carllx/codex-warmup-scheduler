@@ -13,7 +13,7 @@
       "breakdown": {
         "time": "2026-09-18 10:45",
         "expectedBoundary": "2026-09-18 15:45",
-        "totalScore": 110.2,
+        "totalScore": 79.9,
         "candidateUtility": 64.0,
         "servedDemand": 64.0,
         "unservedDemand": 0.0,
@@ -65,7 +65,7 @@
         {
           "time": "2026-09-18 10:45",
           "expectedBoundary": "2026-09-18 15:45",
-          "totalScore": 110.2,
+          "totalScore": 79.9,
           "candidateUtility": 64.0,
           "servedDemand": 64.0,
           "unservedDemand": 0.0,
@@ -116,7 +116,7 @@
         {
           "time": "2026-09-18 11:00",
           "expectedBoundary": "2026-09-18 16:00",
-          "totalScore": 110.2,
+          "totalScore": 79.3,
           "candidateUtility": 64.0,
           "servedDemand": 64.0,
           "unservedDemand": 0.0,
@@ -167,7 +167,7 @@
         {
           "time": "2026-09-18 11:15",
           "expectedBoundary": "2026-09-18 16:15",
-          "totalScore": 110.2,
+          "totalScore": 78.8,
           "candidateUtility": 64.0,
           "servedDemand": 64.0,
           "unservedDemand": 0.0,
@@ -218,7 +218,7 @@
         {
           "time": "2026-09-18 10:30",
           "expectedBoundary": "2026-09-18 15:30",
-          "totalScore": 92.2,
+          "totalScore": 67.3,
           "candidateUtility": 64.0,
           "servedDemand": 64.0,
           "unservedDemand": 0.0,
@@ -269,7 +269,7 @@
         {
           "time": "2026-09-18 11:30",
           "expectedBoundary": "2026-09-18 16:30",
-          "totalScore": 92.2,
+          "totalScore": 65.5,
           "candidateUtility": 64.0,
           "servedDemand": 64.0,
           "unservedDemand": 0.0,
@@ -332,9 +332,9 @@
       "score": -5.0,
       "reason": "Candidate utility (92.0) does not exceed natural baseline 'NATURAL_USE_NOW' (92.0) by threshold (15.0) [incremental benefit: -5.0]",
       "breakdown": {
-        "time": "2026-09-18 14:45",
-        "expectedBoundary": "2026-09-18 19:45",
-        "totalScore": 113.4,
+        "time": "2026-09-17 21:00",
+        "expectedBoundary": "2026-09-18 02:00",
+        "totalScore": 135.0,
         "candidateUtility": 92.0,
         "servedDemand": 92.0,
         "unservedDemand": 0.0,
@@ -342,8 +342,8 @@
           {
             "start": "2026-09-17 21:00",
             "end": "2026-09-18 02:00",
-            "source": "NATURAL_USE",
-            "capacity": 100.0
+            "source": "ARTIFICIAL_WARMUP",
+            "capacity": 99.0
           },
           {
             "start": "2026-09-18 09:00",
@@ -364,10 +364,10 @@
             "capacity": 100.0
           }
         ],
-        "workCoverage": 88.0,
-        "boundaryAlignment": 40.0,
+        "workCoverage": 50.0,
+        "boundaryAlignment": 0.0,
         "wakeBenefit": 0.0,
-        "immediateBonus": 0.0,
+        "immediateBonus": 100.0,
         "sleepDisruption": 0.0,
         "warmupCost": 5.0,
         "incrementalCosts": 5.0,
@@ -408,9 +408,9 @@
       },
       "topCandidates": [
         {
-          "time": "2026-09-18 14:45",
-          "expectedBoundary": "2026-09-18 19:45",
-          "totalScore": 113.4,
+          "time": "2026-09-17 21:00",
+          "expectedBoundary": "2026-09-18 02:00",
+          "totalScore": 135.0,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -418,8 +418,8 @@
             {
               "start": "2026-09-17 21:00",
               "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
+              "source": "ARTIFICIAL_WARMUP",
+              "capacity": 99.0
             },
             {
               "start": "2026-09-18 09:00",
@@ -440,160 +440,10 @@
               "capacity": 100.0
             }
           ],
-          "workCoverage": 88.0,
-          "boundaryAlignment": 40.0,
+          "workCoverage": 50.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NATURAL_USE_NOW",
-          "baselineUtility": 92.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 92.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-18 15:00",
-          "expectedBoundary": "2026-09-18 20:00",
-          "totalScore": 110.2,
-          "candidateUtility": 92.0,
-          "servedDemand": 92.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 84.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NATURAL_USE_NOW",
-          "baselineUtility": 92.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 92.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-18 15:15",
-          "expectedBoundary": "2026-09-18 20:15",
-          "totalScore": 110.2,
-          "candidateUtility": 92.0,
-          "servedDemand": 92.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 84.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
+          "immediateBonus": 100.0,
           "sleepDisruption": 0.0,
           "warmupCost": 5.0,
           "incrementalCosts": 5.0,
@@ -635,7 +485,7 @@
         {
           "time": "2026-09-18 08:45",
           "expectedBoundary": "2026-09-18 13:45",
-          "totalScore": 103.8,
+          "totalScore": 79.4,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -710,7 +560,7 @@
         {
           "time": "2026-09-18 09:00",
           "expectedBoundary": "2026-09-18 14:00",
-          "totalScore": 103.8,
+          "totalScore": 78.9,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -781,6 +631,156 @@
               "capacity": 100.0
             }
           ]
+        },
+        {
+          "time": "2026-09-18 09:15",
+          "expectedBoundary": "2026-09-18 14:15",
+          "totalScore": 78.4,
+          "candidateUtility": 92.0,
+          "servedDemand": 92.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 76.0,
+          "boundaryAlignment": 40.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NATURAL_USE_NOW",
+          "baselineUtility": 92.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 92.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
+          "time": "2026-09-18 14:45",
+          "expectedBoundary": "2026-09-18 19:45",
+          "totalScore": 73.1,
+          "candidateUtility": 92.0,
+          "servedDemand": 92.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 88.0,
+          "boundaryAlignment": 40.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NATURAL_USE_NOW",
+          "baselineUtility": 92.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 92.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
         }
       ]
     }
@@ -797,9 +797,9 @@
       "score": -5.0,
       "reason": "Candidate utility (80.0) does not exceed natural baseline 'NATURAL_USE_NOW' (80.0) by threshold (15.0) [incremental benefit: -5.0]",
       "breakdown": {
-        "time": "2026-09-18 08:45",
-        "expectedBoundary": "2026-09-18 13:45",
-        "totalScore": 100.6,
+        "time": "2026-09-18 07:00",
+        "expectedBoundary": "2026-09-18 12:00",
+        "totalScore": 175.0,
         "candidateUtility": 80.0,
         "servedDemand": 80.0,
         "unservedDemand": 0.0,
@@ -807,8 +807,8 @@
           {
             "start": "2026-09-18 07:00",
             "end": "2026-09-18 12:00",
-            "source": "NATURAL_USE",
-            "capacity": 100.0
+            "source": "ARTIFICIAL_WARMUP",
+            "capacity": 99.0
           },
           {
             "start": "2026-09-18 14:00",
@@ -817,10 +817,10 @@
             "capacity": 100.0
           }
         ],
-        "workCoverage": 72.0,
-        "boundaryAlignment": 40.0,
+        "workCoverage": 100.0,
+        "boundaryAlignment": 0.0,
         "wakeBenefit": 0.0,
-        "immediateBonus": 0.0,
+        "immediateBonus": 100.0,
         "sleepDisruption": 0.0,
         "warmupCost": 5.0,
         "incrementalCosts": 5.0,
@@ -849,9 +849,60 @@
       },
       "topCandidates": [
         {
+          "time": "2026-09-18 07:00",
+          "expectedBoundary": "2026-09-18 12:00",
+          "totalScore": 175.0,
+          "candidateUtility": 80.0,
+          "servedDemand": 80.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-18 07:00",
+              "end": "2026-09-18 12:00",
+              "source": "ARTIFICIAL_WARMUP",
+              "capacity": 99.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 100.0,
+          "boundaryAlignment": 0.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 100.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NATURAL_USE_NOW",
+          "baselineUtility": 80.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 80.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-18 07:00",
+              "end": "2026-09-18 12:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
           "time": "2026-09-18 08:45",
           "expectedBoundary": "2026-09-18 13:45",
-          "totalScore": 100.6,
+          "totalScore": 97.1,
           "candidateUtility": 80.0,
           "servedDemand": 80.0,
           "unservedDemand": 0.0,
@@ -902,7 +953,7 @@
         {
           "time": "2026-09-18 09:00",
           "expectedBoundary": "2026-09-18 14:00",
-          "totalScore": 97.4,
+          "totalScore": 93.5,
           "candidateUtility": 80.0,
           "servedDemand": 80.0,
           "unservedDemand": 0.0,
@@ -953,58 +1004,7 @@
         {
           "time": "2026-09-18 09:15",
           "expectedBoundary": "2026-09-18 14:15",
-          "totalScore": 97.4,
-          "candidateUtility": 80.0,
-          "servedDemand": 80.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-18 07:00",
-              "end": "2026-09-18 12:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 68.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NATURAL_USE_NOW",
-          "baselineUtility": 80.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 80.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-18 07:00",
-              "end": "2026-09-18 12:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-19 09:00",
-          "expectedBoundary": "2026-09-19 14:00",
-          "totalScore": 97.4,
+          "totalScore": 93.0,
           "candidateUtility": 80.0,
           "servedDemand": 80.0,
           "unservedDemand": 0.0,
@@ -1055,7 +1055,7 @@
         {
           "time": "2026-09-18 08:30",
           "expectedBoundary": "2026-09-18 13:30",
-          "totalScore": 85.8,
+          "totalScore": 83.2,
           "candidateUtility": 80.0,
           "servedDemand": 80.0,
           "unservedDemand": 0.0,
@@ -1120,7 +1120,7 @@
       "breakdown": {
         "time": "2026-09-18 10:00",
         "expectedBoundary": "2026-09-18 15:00",
-        "totalScore": 131.0,
+        "totalScore": 96.9,
         "candidateUtility": 40.0,
         "servedDemand": 40.0,
         "unservedDemand": 0.0,
@@ -1166,7 +1166,7 @@
         {
           "time": "2026-09-18 10:00",
           "expectedBoundary": "2026-09-18 15:00",
-          "totalScore": 131.0,
+          "totalScore": 96.9,
           "candidateUtility": 40.0,
           "servedDemand": 40.0,
           "unservedDemand": 0.0,
@@ -1211,7 +1211,7 @@
         {
           "time": "2026-09-18 10:05",
           "expectedBoundary": "2026-09-18 15:05",
-          "totalScore": 131.0,
+          "totalScore": 96.7,
           "candidateUtility": 40.0,
           "servedDemand": 40.0,
           "unservedDemand": 0.0,
@@ -1256,7 +1256,7 @@
         {
           "time": "2026-09-18 10:15",
           "expectedBoundary": "2026-09-18 15:15",
-          "totalScore": 122.2,
+          "totalScore": 89.8,
           "candidateUtility": 40.0,
           "servedDemand": 40.0,
           "unservedDemand": 0.0,
@@ -1301,7 +1301,7 @@
         {
           "time": "2026-09-18 09:45",
           "expectedBoundary": "2026-09-18 14:45",
-          "totalScore": 119.0,
+          "totalScore": 88.7,
           "candidateUtility": 40.0,
           "servedDemand": 40.0,
           "unservedDemand": 0.0,
@@ -1346,7 +1346,7 @@
         {
           "time": "2026-09-18 10:30",
           "expectedBoundary": "2026-09-18 15:30",
-          "totalScore": 107.4,
+          "totalScore": 78.4,
           "candidateUtility": 40.0,
           "servedDemand": 40.0,
           "unservedDemand": 0.0,
@@ -1414,19 +1414,19 @@
       "candidateUtility": 0.0,
       "incrementalBenefit": -5.0,
       "incrementalThreshold": 15.0,
-      "score": -5.0,
-      "reason": "Candidate utility (0.0) does not exceed natural baseline 'NO_EXPECTED_WORK' (0.0) by threshold (15.0) [incremental benefit: -5.0]",
+      "score": -3.3,
+      "reason": "Best score (-3.3) below minimum useful threshold (30.0)",
       "breakdown": {
-        "time": "2026-09-18 09:00",
-        "expectedBoundary": "2026-09-18 14:00",
-        "totalScore": -5.0,
+        "time": "2026-09-19 00:30",
+        "expectedBoundary": "2026-09-19 05:30",
+        "totalScore": -3.3,
         "candidateUtility": 0.0,
         "servedDemand": 0.0,
         "unservedDemand": 0.0,
         "trajectoryWindows": [
           {
-            "start": "2026-09-18 09:00",
-            "end": "2026-09-18 14:00",
+            "start": "2026-09-19 00:30",
+            "end": "2026-09-19 05:30",
             "source": "ARTIFICIAL_WARMUP",
             "capacity": 99.0
           }
@@ -1450,16 +1450,16 @@
       },
       "topCandidates": [
         {
-          "time": "2026-09-18 09:00",
-          "expectedBoundary": "2026-09-18 14:00",
-          "totalScore": -5.0,
+          "time": "2026-09-19 00:30",
+          "expectedBoundary": "2026-09-19 05:30",
+          "totalScore": -3.3,
           "candidateUtility": 0.0,
           "servedDemand": 0.0,
           "unservedDemand": 0.0,
           "trajectoryWindows": [
             {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
+              "start": "2026-09-19 00:30",
+              "end": "2026-09-19 05:30",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
             }
@@ -1482,16 +1482,16 @@
           "baselineWindows": []
         },
         {
-          "time": "2026-09-18 09:15",
-          "expectedBoundary": "2026-09-18 14:15",
-          "totalScore": -5.0,
+          "time": "2026-09-19 00:45",
+          "expectedBoundary": "2026-09-19 05:45",
+          "totalScore": -3.3,
           "candidateUtility": 0.0,
           "servedDemand": 0.0,
           "unservedDemand": 0.0,
           "trajectoryWindows": [
             {
-              "start": "2026-09-18 09:15",
-              "end": "2026-09-18 14:15",
+              "start": "2026-09-19 00:45",
+              "end": "2026-09-19 05:45",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
             }
@@ -1514,16 +1514,16 @@
           "baselineWindows": []
         },
         {
-          "time": "2026-09-18 09:30",
-          "expectedBoundary": "2026-09-18 14:30",
-          "totalScore": -5.0,
+          "time": "2026-09-19 01:00",
+          "expectedBoundary": "2026-09-19 06:00",
+          "totalScore": -3.3,
           "candidateUtility": 0.0,
           "servedDemand": 0.0,
           "unservedDemand": 0.0,
           "trajectoryWindows": [
             {
-              "start": "2026-09-18 09:30",
-              "end": "2026-09-18 14:30",
+              "start": "2026-09-19 01:00",
+              "end": "2026-09-19 06:00",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
             }
@@ -1546,16 +1546,16 @@
           "baselineWindows": []
         },
         {
-          "time": "2026-09-18 09:45",
-          "expectedBoundary": "2026-09-18 14:45",
-          "totalScore": -5.0,
+          "time": "2026-09-19 01:15",
+          "expectedBoundary": "2026-09-19 06:15",
+          "totalScore": -3.3,
           "candidateUtility": 0.0,
           "servedDemand": 0.0,
           "unservedDemand": 0.0,
           "trajectoryWindows": [
             {
-              "start": "2026-09-18 09:45",
-              "end": "2026-09-18 14:45",
+              "start": "2026-09-19 01:15",
+              "end": "2026-09-19 06:15",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
             }
@@ -1578,16 +1578,16 @@
           "baselineWindows": []
         },
         {
-          "time": "2026-09-18 10:00",
-          "expectedBoundary": "2026-09-18 15:00",
-          "totalScore": -5.0,
+          "time": "2026-09-18 23:30",
+          "expectedBoundary": "2026-09-19 04:30",
+          "totalScore": -3.4,
           "candidateUtility": 0.0,
           "servedDemand": 0.0,
           "unservedDemand": 0.0,
           "trajectoryWindows": [
             {
-              "start": "2026-09-18 10:00",
-              "end": "2026-09-18 15:00",
+              "start": "2026-09-18 23:30",
+              "end": "2026-09-19 04:30",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
             }
@@ -1624,9 +1624,9 @@
       "score": -5.0,
       "reason": "Candidate utility (68.0) does not exceed natural baseline 'EXISTING_ACTIVE_WINDOW' (68.0) by threshold (15.0) [incremental benefit: -5.0]",
       "breakdown": {
-        "time": "2026-09-19 08:45",
-        "expectedBoundary": "2026-09-19 13:45",
-        "totalScore": 103.8,
+        "time": "2026-09-18 14:00",
+        "expectedBoundary": "2026-09-18 19:00",
+        "totalScore": 69.0,
         "candidateUtility": 68.0,
         "servedDemand": 68.0,
         "unservedDemand": 0.0,
@@ -1640,18 +1640,18 @@
           {
             "start": "2026-09-18 14:00",
             "end": "2026-09-18 19:00",
-            "source": "NATURAL_USE",
-            "capacity": 100.0
-          },
-          {
-            "start": "2026-09-19 08:45",
-            "end": "2026-09-19 13:45",
             "source": "ARTIFICIAL_WARMUP",
             "capacity": 99.0
+          },
+          {
+            "start": "2026-09-19 09:00",
+            "end": "2026-09-19 14:00",
+            "source": "NATURAL_USE",
+            "capacity": 100.0
           }
         ],
-        "workCoverage": 76.0,
-        "boundaryAlignment": 40.0,
+        "workCoverage": 100.0,
+        "boundaryAlignment": 0.0,
         "wakeBenefit": 0.0,
         "immediateBonus": 0.0,
         "sleepDisruption": 0.0,
@@ -1688,9 +1688,9 @@
       },
       "topCandidates": [
         {
-          "time": "2026-09-19 08:45",
-          "expectedBoundary": "2026-09-19 13:45",
-          "totalScore": 103.8,
+          "time": "2026-09-18 14:00",
+          "expectedBoundary": "2026-09-18 19:00",
+          "totalScore": 69.0,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -1704,18 +1704,18 @@
             {
               "start": "2026-09-18 14:00",
               "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-19 08:45",
-              "end": "2026-09-19 13:45",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
+            },
+            {
+              "start": "2026-09-19 09:00",
+              "end": "2026-09-19 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
             }
           ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 40.0,
+          "workCoverage": 100.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
           "sleepDisruption": 0.0,
@@ -1751,9 +1751,9 @@
           ]
         },
         {
-          "time": "2026-09-19 09:00",
-          "expectedBoundary": "2026-09-19 14:00",
-          "totalScore": 103.8,
+          "time": "2026-09-18 13:45",
+          "expectedBoundary": "2026-09-18 18:45",
+          "totalScore": 66.4,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -1765,20 +1765,26 @@
               "capacity": 100.0
             },
             {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-19 09:00",
-              "end": "2026-09-19 14:00",
+              "start": "2026-09-18 13:45",
+              "end": "2026-09-18 18:45",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
+            },
+            {
+              "start": "2026-09-18 18:45",
+              "end": "2026-09-18 23:45",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-19 09:00",
+              "end": "2026-09-19 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
             }
           ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 40.0,
+          "workCoverage": 96.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
           "sleepDisruption": 0.0,
@@ -1814,9 +1820,9 @@
           ]
         },
         {
-          "time": "2026-09-19 09:15",
-          "expectedBoundary": "2026-09-19 14:15",
-          "totalScore": 103.8,
+          "time": "2026-09-18 14:15",
+          "expectedBoundary": "2026-09-18 19:15",
+          "totalScore": 65.7,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -1840,8 +1846,8 @@
               "capacity": 100.0
             }
           ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 40.0,
+          "workCoverage": 96.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
           "sleepDisruption": 0.0,
@@ -1877,9 +1883,9 @@
           ]
         },
         {
-          "time": "2026-09-19 08:30",
-          "expectedBoundary": "2026-09-19 13:30",
-          "totalScore": 85.8,
+          "time": "2026-09-18 13:30",
+          "expectedBoundary": "2026-09-18 18:30",
+          "totalScore": 63.8,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -1891,20 +1897,26 @@
               "capacity": 100.0
             },
             {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-19 08:30",
-              "end": "2026-09-19 13:30",
+              "start": "2026-09-18 13:30",
+              "end": "2026-09-18 18:30",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
+            },
+            {
+              "start": "2026-09-18 18:30",
+              "end": "2026-09-18 23:30",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-19 09:00",
+              "end": "2026-09-19 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
             }
           ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 25.0,
+          "workCoverage": 92.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
           "sleepDisruption": 0.0,
@@ -1940,9 +1952,9 @@
           ]
         },
         {
-          "time": "2026-09-19 09:30",
-          "expectedBoundary": "2026-09-19 14:30",
-          "totalScore": 85.8,
+          "time": "2026-09-18 13:31",
+          "expectedBoundary": "2026-09-18 18:31",
+          "totalScore": 63.8,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -1954,8 +1966,14 @@
               "capacity": 100.0
             },
             {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
+              "start": "2026-09-18 13:31",
+              "end": "2026-09-18 18:31",
+              "source": "ARTIFICIAL_WARMUP",
+              "capacity": 99.0
+            },
+            {
+              "start": "2026-09-18 18:45",
+              "end": "2026-09-18 23:45",
               "source": "NATURAL_USE",
               "capacity": 100.0
             },
@@ -1966,8 +1984,8 @@
               "capacity": 100.0
             }
           ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 25.0,
+          "workCoverage": 92.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
           "sleepDisruption": 0.0,
@@ -2017,9 +2035,9 @@
       "score": -5.0,
       "reason": "Candidate utility (68.0) does not exceed natural baseline 'EXISTING_ACTIVE_WINDOW' (68.0) by threshold (15.0) [incremental benefit: -5.0]",
       "breakdown": {
-        "time": "2026-09-19 09:00",
-        "expectedBoundary": "2026-09-19 14:00",
-        "totalScore": 103.8,
+        "time": "2026-09-18 14:00",
+        "expectedBoundary": "2026-09-18 19:00",
+        "totalScore": 65.2,
         "candidateUtility": 68.0,
         "servedDemand": 68.0,
         "unservedDemand": 0.0,
@@ -2043,8 +2061,8 @@
             "capacity": 100.0
           }
         ],
-        "workCoverage": 76.0,
-        "boundaryAlignment": 40.0,
+        "workCoverage": 100.0,
+        "boundaryAlignment": 0.0,
         "wakeBenefit": 0.0,
         "immediateBonus": 0.0,
         "sleepDisruption": 0.0,
@@ -2081,72 +2099,9 @@
       },
       "topCandidates": [
         {
-          "time": "2026-09-19 09:00",
-          "expectedBoundary": "2026-09-19 14:00",
-          "totalScore": 103.8,
-          "candidateUtility": 68.0,
-          "servedDemand": 68.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-18 07:30",
-              "end": "2026-09-18 11:00",
-              "source": "INITIAL_ACTIVE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 11:00",
-              "end": "2026-09-18 16:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 16:00",
-              "end": "2026-09-18 21:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "EXISTING_ACTIVE_WINDOW",
-          "baselineUtility": 68.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 68.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-18 07:30",
-              "end": "2026-09-18 11:00",
-              "source": "INITIAL_ACTIVE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 11:00",
-              "end": "2026-09-18 16:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 16:00",
-              "end": "2026-09-18 21:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
           "time": "2026-09-18 14:00",
           "expectedBoundary": "2026-09-18 19:00",
-          "totalScore": 75.0,
+          "totalScore": 65.2,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2209,7 +2164,7 @@
         {
           "time": "2026-09-18 13:45",
           "expectedBoundary": "2026-09-18 18:45",
-          "totalScore": 71.8,
+          "totalScore": 62.8,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2270,9 +2225,72 @@
           ]
         },
         {
+          "time": "2026-09-19 09:00",
+          "expectedBoundary": "2026-09-19 14:00",
+          "totalScore": 62.3,
+          "candidateUtility": 68.0,
+          "servedDemand": 68.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-18 07:30",
+              "end": "2026-09-18 11:00",
+              "source": "INITIAL_ACTIVE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 11:00",
+              "end": "2026-09-18 16:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 16:00",
+              "end": "2026-09-18 21:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 76.0,
+          "boundaryAlignment": 40.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "EXISTING_ACTIVE_WINDOW",
+          "baselineUtility": 68.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 68.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-18 07:30",
+              "end": "2026-09-18 11:00",
+              "source": "INITIAL_ACTIVE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 11:00",
+              "end": "2026-09-18 16:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 16:00",
+              "end": "2026-09-18 21:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
           "time": "2026-09-18 14:15",
           "expectedBoundary": "2026-09-18 19:15",
-          "totalScore": 71.8,
+          "totalScore": 62.1,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2335,7 +2353,7 @@
         {
           "time": "2026-09-18 13:30",
           "expectedBoundary": "2026-09-18 18:30",
-          "totalScore": 68.6,
+          "totalScore": 60.4,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2412,7 +2430,7 @@
       "breakdown": {
         "time": "2026-09-18 08:45",
         "expectedBoundary": "2026-09-18 13:45",
-        "totalScore": 103.8,
+        "totalScore": 101.2,
         "candidateUtility": 68.0,
         "servedDemand": 68.0,
         "unservedDemand": 0.0,
@@ -2464,7 +2482,7 @@
         {
           "time": "2026-09-18 08:45",
           "expectedBoundary": "2026-09-18 13:45",
-          "totalScore": 103.8,
+          "totalScore": 101.2,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2515,7 +2533,7 @@
         {
           "time": "2026-09-18 09:00",
           "expectedBoundary": "2026-09-18 14:00",
-          "totalScore": 103.8,
+          "totalScore": 100.7,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2566,58 +2584,7 @@
         {
           "time": "2026-09-18 09:15",
           "expectedBoundary": "2026-09-18 14:15",
-          "totalScore": 103.8,
-          "candidateUtility": 68.0,
-          "servedDemand": 68.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 76.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NEXT_NATURAL_USE",
-          "baselineUtility": 68.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 68.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-19 09:00",
-          "expectedBoundary": "2026-09-19 14:00",
-          "totalScore": 103.8,
+          "totalScore": 100.2,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2668,7 +2635,7 @@
         {
           "time": "2026-09-18 08:30",
           "expectedBoundary": "2026-09-18 13:30",
-          "totalScore": 85.8,
+          "totalScore": 84.1,
           "candidateUtility": 68.0,
           "servedDemand": 68.0,
           "unservedDemand": 0.0,
@@ -2678,6 +2645,57 @@
               "end": "2026-09-18 13:30",
               "source": "ARTIFICIAL_WARMUP",
               "capacity": 99.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 76.0,
+          "boundaryAlignment": 25.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NEXT_NATURAL_USE",
+          "baselineUtility": 68.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 68.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
+          "time": "2026-09-18 09:30",
+          "expectedBoundary": "2026-09-18 14:30",
+          "totalScore": 82.4,
+          "candidateUtility": 68.0,
+          "servedDemand": 68.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
             },
             {
               "start": "2026-09-18 14:00",
@@ -2731,9 +2749,9 @@
       "score": -5.0,
       "reason": "Candidate utility (92.0) does not exceed natural baseline 'NATURAL_USE_NOW' (92.0) by threshold (15.0) [incremental benefit: -5.0]",
       "breakdown": {
-        "time": "2026-09-18 14:45",
-        "expectedBoundary": "2026-09-18 19:45",
-        "totalScore": 113.4,
+        "time": "2026-09-17 21:00",
+        "expectedBoundary": "2026-09-18 02:00",
+        "totalScore": 135.0,
         "candidateUtility": 92.0,
         "servedDemand": 92.0,
         "unservedDemand": 0.0,
@@ -2741,8 +2759,8 @@
           {
             "start": "2026-09-17 21:00",
             "end": "2026-09-18 02:00",
-            "source": "NATURAL_USE",
-            "capacity": 100.0
+            "source": "ARTIFICIAL_WARMUP",
+            "capacity": 99.0
           },
           {
             "start": "2026-09-18 09:00",
@@ -2763,10 +2781,10 @@
             "capacity": 100.0
           }
         ],
-        "workCoverage": 88.0,
-        "boundaryAlignment": 40.0,
+        "workCoverage": 50.0,
+        "boundaryAlignment": 0.0,
         "wakeBenefit": 0.0,
-        "immediateBonus": 0.0,
+        "immediateBonus": 100.0,
         "sleepDisruption": 0.0,
         "warmupCost": 5.0,
         "incrementalCosts": 5.0,
@@ -2807,9 +2825,9 @@
       },
       "topCandidates": [
         {
-          "time": "2026-09-18 14:45",
-          "expectedBoundary": "2026-09-18 19:45",
-          "totalScore": 113.4,
+          "time": "2026-09-17 21:00",
+          "expectedBoundary": "2026-09-18 02:00",
+          "totalScore": 135.0,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -2817,8 +2835,8 @@
             {
               "start": "2026-09-17 21:00",
               "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
+              "source": "ARTIFICIAL_WARMUP",
+              "capacity": 99.0
             },
             {
               "start": "2026-09-18 09:00",
@@ -2839,160 +2857,10 @@
               "capacity": 100.0
             }
           ],
-          "workCoverage": 88.0,
-          "boundaryAlignment": 40.0,
+          "workCoverage": 50.0,
+          "boundaryAlignment": 0.0,
           "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NATURAL_USE_NOW",
-          "baselineUtility": 92.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 92.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-18 15:00",
-          "expectedBoundary": "2026-09-18 20:00",
-          "totalScore": 110.2,
-          "candidateUtility": 92.0,
-          "servedDemand": 92.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 84.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
-          "sleepDisruption": 0.0,
-          "warmupCost": 5.0,
-          "incrementalCosts": 5.0,
-          "risk": 0.0,
-          "isSleep": false,
-          "baselineType": "NATURAL_USE_NOW",
-          "baselineUtility": 92.0,
-          "incrementalBenefit": -5.0,
-          "incrementalThreshold": 15.0,
-          "baselineServedDemand": 92.0,
-          "baselineUnservedDemand": 0.0,
-          "baselineWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ]
-        },
-        {
-          "time": "2026-09-18 15:15",
-          "expectedBoundary": "2026-09-18 20:15",
-          "totalScore": 110.2,
-          "candidateUtility": 92.0,
-          "servedDemand": 92.0,
-          "unservedDemand": 0.0,
-          "trajectoryWindows": [
-            {
-              "start": "2026-09-17 21:00",
-              "end": "2026-09-18 02:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 09:00",
-              "end": "2026-09-18 14:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 14:00",
-              "end": "2026-09-18 19:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            },
-            {
-              "start": "2026-09-18 20:00",
-              "end": "2026-09-19 01:00",
-              "source": "NATURAL_USE",
-              "capacity": 100.0
-            }
-          ],
-          "workCoverage": 84.0,
-          "boundaryAlignment": 40.0,
-          "wakeBenefit": 0.0,
-          "immediateBonus": 0.0,
+          "immediateBonus": 100.0,
           "sleepDisruption": 0.0,
           "warmupCost": 5.0,
           "incrementalCosts": 5.0,
@@ -3034,7 +2902,7 @@
         {
           "time": "2026-09-18 08:45",
           "expectedBoundary": "2026-09-18 13:45",
-          "totalScore": 103.8,
+          "totalScore": 79.4,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -3109,7 +2977,7 @@
         {
           "time": "2026-09-18 09:00",
           "expectedBoundary": "2026-09-18 14:00",
-          "totalScore": 103.8,
+          "totalScore": 78.9,
           "candidateUtility": 92.0,
           "servedDemand": 92.0,
           "unservedDemand": 0.0,
@@ -3140,6 +3008,156 @@
             }
           ],
           "workCoverage": 76.0,
+          "boundaryAlignment": 40.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NATURAL_USE_NOW",
+          "baselineUtility": 92.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 92.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
+          "time": "2026-09-18 09:15",
+          "expectedBoundary": "2026-09-18 14:15",
+          "totalScore": 78.4,
+          "candidateUtility": 92.0,
+          "servedDemand": 92.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 76.0,
+          "boundaryAlignment": 40.0,
+          "wakeBenefit": 0.0,
+          "immediateBonus": 0.0,
+          "sleepDisruption": 0.0,
+          "warmupCost": 5.0,
+          "incrementalCosts": 5.0,
+          "risk": 0.0,
+          "isSleep": false,
+          "baselineType": "NATURAL_USE_NOW",
+          "baselineUtility": 92.0,
+          "incrementalBenefit": -5.0,
+          "incrementalThreshold": 15.0,
+          "baselineServedDemand": 92.0,
+          "baselineUnservedDemand": 0.0,
+          "baselineWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ]
+        },
+        {
+          "time": "2026-09-18 14:45",
+          "expectedBoundary": "2026-09-18 19:45",
+          "totalScore": 73.1,
+          "candidateUtility": 92.0,
+          "servedDemand": 92.0,
+          "unservedDemand": 0.0,
+          "trajectoryWindows": [
+            {
+              "start": "2026-09-17 21:00",
+              "end": "2026-09-18 02:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 09:00",
+              "end": "2026-09-18 14:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 14:00",
+              "end": "2026-09-18 19:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            },
+            {
+              "start": "2026-09-18 20:00",
+              "end": "2026-09-19 01:00",
+              "source": "NATURAL_USE",
+              "capacity": 100.0
+            }
+          ],
+          "workCoverage": 88.0,
           "boundaryAlignment": 40.0,
           "wakeBenefit": 0.0,
           "immediateBonus": 0.0,
