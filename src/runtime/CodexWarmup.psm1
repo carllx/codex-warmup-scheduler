@@ -6,6 +6,12 @@
     ephemeral warmup execution with bounded timeouts.
 #>
 
+# Capture module root at module load time
+$script:CodexWarmupModuleRoot = $PSScriptRoot
+if (-not $script:CodexWarmupModuleRoot -and $MyInvocation.MyCommand.Path) {
+    $script:CodexWarmupModuleRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
 function Invoke-CodexWarmup {
     [CmdletBinding()]
     param(
@@ -26,8 +32,10 @@ function Invoke-CodexWarmup {
     )
 
     $ErrorActionPreference = "Stop"
-    $moduleDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    if (-not $moduleDir) { $moduleDir = $PSScriptRoot }
+    $moduleDir = $script:CodexWarmupModuleRoot
+    if (-not $moduleDir) {
+        throw "Cannot resolve CodexWarmup module root."
+    }
 
     if (-not $CodexExe -or -not (Test-Path $CodexExe)) {
         . (Join-Path $moduleDir "Resolve-CodexRuntime.ps1")
