@@ -71,6 +71,7 @@ try {
     Import-Module (Join-Path $RuntimeDir "ProcessRunner.psm1") -Force
     Import-Module (Join-Path $RuntimeDir "CodexWarmup.psm1") -Force
     Import-Module (Join-Path $RuntimeDir "QuotaObservation.psm1") -Force
+    Import-Module (Join-Path $RuntimeDir "WarmupNotification.psm1") -Force
 
     # 1. Resolve Codex Executable
     . (Join-Path $RuntimeDir "Resolve-CodexRuntime.ps1")
@@ -225,13 +226,22 @@ try {
             if ($ShadowMode) {
                 Log-Message "[ShadowMode] Simulated Warmup completed. Proceeding to simulated re-probe & reschedule."
             } else {
+                if (-not $DryRun) {
+                    Show-WarmupNotification -Kind Starting
+                }
                 Log-Message "Invoking Invoke-CodexWarmup..."
                 $res = Invoke-CodexWarmup -CodexExe $runtime.path
                 Log-Message "Warmup completed. ExitCode=$($res.ExitCode), Output=$($res.Stdout)"
                 if (-not $res.Success) {
+                    if (-not $DryRun) {
+                        Show-WarmupNotification -Kind Failure
+                    }
                     Log-Message "Warmup execution did not return Ready or failed. Scheduling retry in 5 minutes." "ERROR"
                     Update-ScheduledTrigger -TargetDateTime (Get-Date).AddMinutes(5) -ShadowMode:$ShadowMode.IsPresent -DryRun:$DryRun.IsPresent
                     exit 3
+                }
+                if (-not $DryRun) {
+                    Show-WarmupNotification -Kind Success
                 }
             }
 

@@ -25,6 +25,7 @@ $filesToDeploy = @(
     "src\runtime\Resolve-CodexRuntime.ps1",
     "src\runtime\Get-CodexRateLimits.ps1",
     "src\runtime\CodexWarmup.psm1",
+    "src\runtime\WarmupNotification.psm1",
     "src\runtime\Execute-CodexWarmup.ps1",
     "src\runtime\ProcessRunner.psm1",
     "src\runtime\RateLimitClassifier.psm1",
