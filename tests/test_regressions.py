@@ -180,7 +180,9 @@ class TestRegressions(unittest.TestCase):
 
     def test_r4_delayed_missed_run_probes_fresh_state_and_replans(self):
         """
-        R4: Verify controller in -ShadowMode -DryRun performs fresh probe & replan, never blind execution.
+        R4: fresh probe then replan-or-defer; never blind replay
+        Verify controller in -ShadowMode -DryRun performs fresh probe and either
+        fresh engine replan or safe bounded deferral, never blind execution.
         """
         cmd = f"& '{CONTROLLER_PATH}' -ShadowMode -DryRun"
         code, stdout, stderr = run_powershell(cmd)
@@ -188,9 +190,17 @@ class TestRegressions(unittest.TestCase):
         self.assertIn("=== Codex Warmup V2 Controller Started ===", stdout)
         self.assertIn("Codex Runtime resolved", stdout)
         self.assertIn("Rate Limits Classified", stdout)
-        self.assertIn("Invoking Decision Engine", stdout)
-        self.assertIn("Decision Engine Result", stdout)
-        self.assertIn("=== Codex Warmup V2 Controller Finished ===", stdout)
+
+        if "Hard Gate Triggered" in stdout:
+            # Branch B — quota ineligible / ambiguous: fail-closed bounded deferral
+            self.assertIn("Scheduling next safety probe", stdout)
+            self.assertNotIn("Invoking Decision Engine", stdout)
+            self.assertNotIn("Invoking Invoke-CodexWarmup", stdout)
+        else:
+            # Branch A — quota eligible: fresh probe -> fresh engine replan
+            self.assertIn("Invoking Decision Engine", stdout)
+            self.assertIn("Decision Engine Result", stdout)
+            self.assertIn("=== Codex Warmup V2 Controller Finished ===", stdout)
 
     def test_r5_named_mutex_concurrency_guard(self):
         """

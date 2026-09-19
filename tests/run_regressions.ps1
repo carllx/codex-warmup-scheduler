@@ -120,17 +120,27 @@ try {
     Assert-Condition $false "R3 Exception" $_
 }
 
-# --- R4: Delayed missed run (starts when available, probes fresh server state, replans) ---
+# --- R4: Delayed missed run (fresh probe then replan-or-defer; never blind replay) ---
 try {
     $ctrlPath = Join-Path $RepoRoot "src\scheduler\controller.ps1"
     $ctrlOut = & pwsh -NoProfile -ExecutionPolicy Bypass -File $ctrlPath -ShadowMode -DryRun
     $ctrlText = $ctrlOut -join "`n"
 
-    Assert-Condition ($ctrlText -match "Codex Runtime resolved") "R4.1: Controller resolved Codex CLI" ""
-    Assert-Condition ($ctrlText -match "Rate Limits Classified") "R4.2: Controller probed & classified rate limits" ""
-    Assert-Condition ($ctrlText -match "Invoking Decision Engine") "R4.3: Controller invoked Decision Engine" ""
-    Assert-Condition ($ctrlText -match "Decision Engine Result") "R4.4: Fresh replan executed successfully" ""
-    Assert-Condition ($ctrlText -match "Controller Finished") "R4.5: Clean exit without blind replay" ""
+    Assert-Condition ($ctrlText -match "=== Codex Warmup V2 Controller Started ===") "R4.1: Controller started" ""
+    Assert-Condition ($ctrlText -match "Codex Runtime resolved") "R4.2: Controller resolved Codex CLI" ""
+    Assert-Condition ($ctrlText -match "Rate Limits Classified") "R4.3: Controller probed & classified rate limits" ""
+
+    if ($ctrlText -match "Hard Gate Triggered") {
+        # Branch B — quota ineligible / ambiguous: fail-closed bounded deferral
+        Assert-Condition ($ctrlText -match "Scheduling next safety probe") "R4.4: Bounded safety probe scheduled" ""
+        Assert-Condition ($ctrlText -notmatch "Invoking Decision Engine") "R4.5: Decision Engine skipped under hard gate" ""
+        Assert-Condition ($ctrlText -notmatch "Invoking Invoke-CodexWarmup") "R4.6: Warmup execution skipped (no blind replay)" ""
+    } else {
+        # Branch A — quota eligible: fresh probe -> fresh engine replan
+        Assert-Condition ($ctrlText -match "Invoking Decision Engine") "R4.4: Controller invoked Decision Engine" ""
+        Assert-Condition ($ctrlText -match "Decision Engine Result") "R4.5: Fresh replan executed successfully" ""
+        Assert-Condition ($ctrlText -match "Controller Finished") "R4.6: Clean exit without blind replay" ""
+    }
 } catch {
     Assert-Condition $false "R4 Exception" $_
 }
