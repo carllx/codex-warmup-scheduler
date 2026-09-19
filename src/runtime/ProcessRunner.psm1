@@ -31,6 +31,7 @@ function Invoke-BoundedProcess {
         $psi.WorkingDirectory = $WorkingDirectory
     }
     $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
@@ -48,6 +49,8 @@ function Invoke-BoundedProcess {
             DurationSec = 0
         }
     }
+
+    $proc.StandardInput.Close()
 
     $pidToManage = $proc.Id
 
