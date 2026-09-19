@@ -30,6 +30,96 @@ class DecisionEngine:
         self.user_profile = self.config.get("userProfile") or {}
         self.demand_profile_raw = self.config.get("demandProfile")
         self.demand_status, self.demand_bands = self.parse_demand_profile(self.demand_profile_raw)
+        self.readiness_policy = self.config.get("readinessPolicy") or {}
+
+    def _get_readiness_policy(self, state=None):
+        pol = None
+        if state:
+            pol = state.get("readinessPolicy")
+            if pol is None and state.get("userProfile"):
+                pol = state["userProfile"].get("readinessPolicy")
+        if pol is None:
+            pol = self.readiness_policy
+        if not isinstance(pol, dict) or pol.get("enabled") is not True:
+            return None
+        prim_start = pol.get("primaryUseStart")
+        pref_reset = pol.get("preferredReset")
+        if not self._is_valid_hhmm(prim_start) or not self._is_valid_hhmm(pref_reset):
+            return None
+        return pol
+
+    def evaluate_readiness_benefit(self, t, state, readiness_pol=None):
+        if readiness_pol is None:
+            readiness_pol = self._get_readiness_policy(state)
+        candidate_reset = t + timedelta(minutes=self.window_duration_min)
+        if not readiness_pol:
+            return {
+                "isMeaningful": False, "resetAdvanceMinutes": 0.0, "readinessBenefit": 0.0,
+                "naturalReset": None, "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+                "reason": "Readiness policy disabled or invalid"
+            }
+
+        prim_str = readiness_pol["primaryUseStart"]
+        pref_str = readiness_pol.get("preferredReset")
+        p_h, p_m = map(int, prim_str.split(":"))
+
+        matching_prim_dt = None
+        for day_offset in range(-1, 3):
+            day_base = t.date() + timedelta(days=day_offset)
+            prim_dt = datetime(day_base.year, day_base.month, day_base.day, p_h, p_m, tzinfo=t.tzinfo)
+            if t < prim_dt < candidate_reset:
+                matching_prim_dt = prim_dt
+                break
+
+        if matching_prim_dt is None:
+            return {
+                "isMeaningful": False, "resetAdvanceMinutes": 0.0, "readinessBenefit": 0.0,
+                "naturalReset": None, "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+                "reason": "Candidate does not satisfy W < primaryUseStart < B"
+            }
+
+        natural_reset = matching_prim_dt + timedelta(minutes=self.window_duration_min)
+        reset_advance = (natural_reset - candidate_reset).total_seconds() / 60.0
+
+        if reset_advance <= 0.0:
+            return {
+                "isMeaningful": False, "resetAdvanceMinutes": 0.0, "readinessBenefit": 0.0,
+                "naturalReset": natural_reset.strftime("%Y-%m-%d %H:%M"),
+                "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+                "reason": "Reset advance is non-positive"
+            }
+
+        if pref_str:
+            r_h, r_m = map(int, pref_str.split(":"))
+            pref_dt = datetime(matching_prim_dt.year, matching_prim_dt.month, matching_prim_dt.day, r_h, r_m, tzinfo=t.tzinfo)
+            if pref_dt <= matching_prim_dt:
+                pref_dt += timedelta(days=1)
+
+            if not (matching_prim_dt < pref_dt < natural_reset):
+                return {
+                    "isMeaningful": False, "resetAdvanceMinutes": 0.0, "readinessBenefit": 0.0,
+                    "naturalReset": natural_reset.strftime("%Y-%m-%d %H:%M"),
+                    "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+                    "reason": "preferredReset is not strictly between primaryUseStart and naturalReset"
+                }
+
+            diff_min = abs((candidate_reset - pref_dt).total_seconds()) / 60.0
+            if diff_min > 5.0:
+                return {
+                    "isMeaningful": False, "resetAdvanceMinutes": 0.0, "readinessBenefit": 0.0,
+                    "naturalReset": natural_reset.strftime("%Y-%m-%d %H:%M"),
+                    "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+                    "reason": f"Candidate boundary does not match preferred reset {pref_str}"
+                }
+
+        return {
+            "isMeaningful": True,
+            "resetAdvanceMinutes": round(reset_advance, 1),
+            "readinessBenefit": round(reset_advance, 1),
+            "naturalReset": natural_reset.strftime("%Y-%m-%d %H:%M"),
+            "expectedBoundary": candidate_reset.strftime("%Y-%m-%d %H:%M"),
+            "reason": "OK"
+        }
 
     def _is_valid_hhmm(self, val):
         try:
@@ -97,7 +187,7 @@ class DecisionEngine:
                 return slot["weight"]
         return 0.2
 
-    def evaluate_window_utility(self, t, profile=None, now=None):
+    def evaluate_window_utility(self, t, profile=None, now=None, readiness_pol=None):
         if now is None:
             now = t
         prof = profile or self.user_profile
@@ -118,6 +208,8 @@ class DecisionEngine:
             all_starts.append((primary_start_str, True))
         for w in (prof.get("expectedWorkWindows", []) if prof else []):
             all_starts.append((w[0], False))
+        if readiness_pol and readiness_pol.get("preferredReset"):
+            all_starts.append((readiness_pol["preferredReset"], True))
 
         for s_str, is_prim in all_starts:
             h, m = map(int, s_str.split(":"))
@@ -305,7 +397,17 @@ class DecisionEngine:
                 if is_prim and (cand_opt1 + timedelta(minutes=5)) >= now:
                     candidates.add(cand_opt1 + timedelta(minutes=5))
 
-        return sorted([c for c in candidates if c >= now])
+        readiness_pol = self._get_readiness_policy(state)
+        if readiness_pol and readiness_pol.get("preferredReset"):
+            h, m = map(int, readiness_pol["preferredReset"].split(":"))
+            for day_offset in range(2):
+                day_base = (now + timedelta(days=day_offset)).date()
+                reset_target = datetime(day_base.year, day_base.month, day_base.day, h, m, tzinfo=now.tzinfo)
+                cand_opt = reset_target - timedelta(minutes=self.window_duration_min)
+                if now <= cand_opt <= end_time:
+                    candidates.add(cand_opt)
+
+        return sorted([c for c in candidates if now <= c <= end_time])
 
     def score_candidate(self, t, state):
         now = self.parse_time(state["now"])
@@ -331,11 +433,13 @@ class DecisionEngine:
             if t < active_reset:
                 return None, f"Inside active window until {active_reset.strftime('%H:%M')}"
 
-        eval_res = self.evaluate_window_utility(t, profile, now)
+        readiness_pol = self._get_readiness_policy(state)
+        eval_res = self.evaluate_window_utility(t, profile, now, readiness_pol=readiness_pol)
         raw_work_coverage = eval_res["workCoverage"]
         boundary_alignment_score = eval_res["boundaryAlignment"]
         candidate_reset = t + timedelta(minutes=self.window_duration_min)
         cand_traj = self.evaluate_trajectory_utility(("WARMUP_AT", t), state)
+        eval_readiness = self.evaluate_readiness_benefit(t, state, readiness_pol)
 
         wake_benefit_score = 0.0
         sleep_disruption_penalty = self.p_sleep_base if is_sleep else 0.0
@@ -372,7 +476,11 @@ class DecisionEngine:
             "warmupCost": round(warmup_cost_penalty, 1),
             "incrementalCosts": cand_traj["incrementalCosts"],
             "risk": round(risk_penalty, 1),
-            "isSleep": is_sleep
+            "isSleep": is_sleep,
+            "readinessBenefit": eval_readiness["readinessBenefit"],
+            "resetAdvanceMinutes": eval_readiness["resetAdvanceMinutes"],
+            "naturalReset": eval_readiness["naturalReset"],
+            "isReadinessMeaningful": eval_readiness["isMeaningful"]
         }, "OK"
 
     def plan_next_action(self, state):
@@ -389,9 +497,10 @@ class DecisionEngine:
         demand_status, demand_bands = self.parse_demand_profile(raw_demand)
         state["demandProfile"] = {"status": demand_status, "bands": demand_bands}
 
+        readiness_pol = self._get_readiness_policy(state)
         inc_thresh = self.min_incremental_benefit
 
-        if demand_status == "UNKNOWN":
+        if demand_status == "UNKNOWN" and readiness_pol is None:
             return {
                 "decision": "NO_ACTION", "baselineType": "DEMAND_UNKNOWN",
                 "baselineUtility": 0.0, "candidateUtility": 0.0, "incrementalBenefit": 0.0,
@@ -400,25 +509,56 @@ class DecisionEngine:
                 "breakdown": None, "topCandidates": []
             }
 
-        baseline = self.compute_natural_baseline(state)
-        b_type, b_util = baseline["baselineType"], baseline["baselineUtility"]
+        if demand_status == "UNKNOWN":
+            b_type, b_util = "DEMAND_UNKNOWN", 0.0
+            baseline = {
+                "baselineType": b_type, "baselineUtility": b_util,
+                "servedDemand": 0.0, "unservedDemand": 0.0, "windows": []
+            }
+        else:
+            baseline = self.compute_natural_baseline(state)
+            b_type, b_util = baseline["baselineType"], baseline["baselineUtility"]
 
         candidates = self.generate_candidates(state)
         scored = []
         for cand in candidates:
             breakdown, reason = self.score_candidate(cand, state)
             if breakdown is not None:
-                inc_benefit = round(breakdown["candidateUtility"] - b_util - breakdown["incrementalCosts"], 1)
+                # Capacity gate evaluation
+                if demand_status == "CALIBRATED":
+                    inc_benefit = round(breakdown["candidateUtility"] - b_util - breakdown["incrementalCosts"], 1)
+                    has_capacity_win = (breakdown["totalScore"] >= self.min_useful_score) and (inc_benefit > inc_thresh)
+                else:
+                    inc_benefit = 0.0
+                    has_capacity_win = False
+
                 breakdown["baselineType"] = b_type
                 breakdown["baselineUtility"] = b_util
                 breakdown["incrementalBenefit"] = inc_benefit
                 breakdown["incrementalThreshold"] = inc_thresh
-                breakdown["baselineServedDemand"] = baseline["servedDemand"]
-                breakdown["baselineUnservedDemand"] = baseline["unservedDemand"]
-                breakdown["baselineWindows"] = baseline["windows"]
+                breakdown["baselineServedDemand"] = baseline.get("servedDemand", 0.0)
+                breakdown["baselineUnservedDemand"] = baseline.get("unservedDemand", 0.0)
+                breakdown["baselineWindows"] = baseline.get("windows", [])
+                breakdown["hasCapacityWin"] = has_capacity_win
+
+                # Readiness gate evaluation (Correction 2: independent reason; NO_DEMAND is excluded)
+                has_readiness_win = False
+                if demand_status != "NO_DEMAND" and readiness_pol is not None:
+                    is_meaningful = breakdown.get("isReadinessMeaningful", False)
+                    adv_min = breakdown.get("resetAdvanceMinutes", 0.0)
+                    has_readiness_win = is_meaningful and (adv_min > 0.0) and (breakdown["totalScore"] >= self.min_useful_score)
+
+                breakdown["hasReadinessWin"] = has_readiness_win
                 scored.append(breakdown)
 
-        scored.sort(key=lambda x: (x["incrementalBenefit"], x["totalScore"]), reverse=True)
+        def sort_key(x):
+            qualifies = 1 if (x["hasCapacityWin"] or x["hasReadinessWin"]) else 0
+            cap_b = x["incrementalBenefit"] if x["hasCapacityWin"] else 0.0
+            read_b = x["resetAdvanceMinutes"] if x["hasReadinessWin"] else 0.0
+            return (qualifies, cap_b, read_b, x["totalScore"])
+
+        scored.sort(key=sort_key, reverse=True)
+
         if not scored:
             return {
                 "decision": "NO_ACTION", "baselineType": b_type, "baselineUtility": b_util,
@@ -433,44 +573,67 @@ class DecisionEngine:
 
         best = scored[0]
 
-        # Gate 1: Absolute usefulness check
-        if best["totalScore"] < self.min_useful_score:
+        if not (best["hasCapacityWin"] or best["hasReadinessWin"]):
+            if demand_status == "CALIBRATED":
+                if best["totalScore"] < self.min_useful_score:
+                    reason = f"Best score ({best['totalScore']}) below minimum useful threshold ({self.min_useful_score})"
+                else:
+                    reason = (
+                        f"Candidate utility ({best['candidateUtility']}) does not exceed "
+                        f"natural baseline '{b_type}' ({b_util}) by threshold ({inc_thresh}) "
+                        f"[incremental benefit: {best['incrementalBenefit']}]"
+                    )
+            elif demand_status == "UNKNOWN":
+                reason = "Readiness policy active but no viable candidate satisfied readiness requirements"
+            else:
+                reason = "No candidate satisfied capacity or readiness gate"
+
             return {
                 "decision": "NO_ACTION", "baselineType": b_type, "baselineUtility": b_util,
                 "candidateUtility": best["candidateUtility"], "incrementalBenefit": best["incrementalBenefit"],
                 "incrementalThreshold": inc_thresh, "score": best["totalScore"],
-                "reason": f"Best score ({best['totalScore']}) below minimum useful threshold ({self.min_useful_score})",
+                "reason": reason,
                 "breakdown": best, "topCandidates": scored[:5]
             }
 
-        # Gate 2: Incremental Benefit Semantic Gate over NO_WARMUP baseline
-        if best["incrementalBenefit"] <= inc_thresh:
-            return {
-                "decision": "NO_ACTION", "baselineType": b_type, "baselineUtility": b_util,
-                "candidateUtility": best["candidateUtility"], "incrementalBenefit": best["incrementalBenefit"],
-                "incrementalThreshold": inc_thresh, "score": best["incrementalBenefit"],
-                "reason": (
-                    f"Candidate utility ({best['candidateUtility']}) does not exceed "
-                    f"natural baseline '{b_type}' ({b_util}) by threshold ({inc_thresh}) "
-                    f"[incremental benefit: {best['incrementalBenefit']}]"
-                ),
-                "breakdown": best, "topCandidates": scored[:5]
-            }
+        if best["hasCapacityWin"] and best["hasReadinessWin"]:
+            decision_reason = "CAPACITY_AND_READINESS_BENEFIT"
+            reason_text = (
+                f"Candidate delivers positive incremental capacity (+{best['incrementalBenefit']}) "
+                f"and {best['resetAdvanceMinutes']}m reset advance under readiness policy"
+            )
+        elif best["hasCapacityWin"]:
+            decision_reason = "CAPACITY_BENEFIT"
+            reason_text = f"Candidate delivers positive incremental benefit ({best['incrementalBenefit']}) over natural baseline '{b_type}' ({b_util})"
+        else:
+            decision_reason = "READINESS_BENEFIT"
+            reason_text = (
+                f"Candidate delivers {best['resetAdvanceMinutes']}m reset advance "
+                f"(natural reset {best['naturalReset']} -> warmup reset {best['expectedBoundary']}) "
+                f"under readiness policy"
+            )
 
         best_time = self.parse_time(best["time"])
         if best_time.tzinfo is None and now.tzinfo is not None:
             best_time = best_time.replace(tzinfo=now.tzinfo)
         is_immediate = (best_time <= now + timedelta(minutes=5))
 
-        return {
+        out = {
             "decision": "WARMUP_NOW" if is_immediate else "SCHEDULE_WARMUP",
+            "decisionReason": decision_reason,
             "baselineType": b_type, "baselineUtility": b_util,
             "candidateUtility": best["candidateUtility"], "incrementalBenefit": best["incrementalBenefit"],
             "incrementalThreshold": inc_thresh, "scheduledTime": best["time"],
             "expectedBoundary": best["expectedBoundary"], "score": best["totalScore"],
-            "reason": f"Candidate delivers positive incremental benefit ({best['incrementalBenefit']}) over natural baseline '{b_type}' ({b_util})",
+            "reason": reason_text,
             "breakdown": best, "topCandidates": scored[:5]
         }
+        if best["hasReadinessWin"]:
+            out["resetAdvanceMinutes"] = best["resetAdvanceMinutes"]
+            out["naturalReset"] = best["naturalReset"]
+            out["readinessBenefit"] = best["resetAdvanceMinutes"]
+
+        return out
 
 if __name__ == "__main__":
     import argparse
@@ -496,5 +659,7 @@ if __name__ == "__main__":
         state["userProfile"] = engine.config["userProfile"]
     if engine.config.get("demandProfile"):
         state["demandProfile"] = engine.config["demandProfile"]
+    if engine.config.get("readinessPolicy"):
+        state["readinessPolicy"] = engine.config["readinessPolicy"]
 
     print(json.dumps(engine.plan_next_action(state), ensure_ascii=False, indent=2))
