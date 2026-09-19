@@ -169,21 +169,69 @@ function ConvertTo-NormalizedQuotaState {
 
     # 6. Reset Anchor Classification (FIXED vs SLIDING_OR_UNINITIALIZED vs UNKNOWN)
     $priorResetEpoch = $null
+    $priorObservedTime = $null
     if ($PreviousProbe) {
         if ($PreviousProbe.ResetEpoch) {
             $priorResetEpoch = [long]$PreviousProbe.ResetEpoch
+        } elseif ($PreviousProbe.resetEpoch) {
+            $priorResetEpoch = [long]$PreviousProbe.resetEpoch
         } elseif ($PreviousProbe -is [long] -or $PreviousProbe -is [int]) {
             $priorResetEpoch = [long]$PreviousProbe
+        }
+
+        $rawTime = $null
+        if ($PreviousProbe.Timestamp) {
+            $rawTime = $PreviousProbe.Timestamp
+        } elseif ($PreviousProbe.timestamp) {
+            $rawTime = $PreviousProbe.timestamp
+        } elseif ($PreviousProbe.ObservedAt) {
+            $rawTime = $PreviousProbe.ObservedAt
+        } elseif ($PreviousProbe.observedAt) {
+            $rawTime = $PreviousProbe.observedAt
+        }
+
+        if ($rawTime) {
+            try {
+                $priorObservedTime = [DateTimeOffset]::Parse([string]$rawTime)
+            } catch {
+                $priorObservedTime = $null
+            }
         }
     }
 
     if (($fiveHourWindow.usedPercent -eq 0 -or $null -eq $fiveHourWindow.usedPercent) -and ($deltaMinutes -ge 295)) {
         if ($null -ne $priorResetEpoch -and $resetEpoch -ne $priorResetEpoch) {
             $result.ResetAnchorStatus = "SLIDING_OR_UNINITIALIZED"
-            $result.FiveHourWindowStatus = "AMBIGUOUS"
-            $result.CanEvaluateWarmup = $false
-            $result.Reason = "Reset anchor is sliding with clock (uninitialized). Quota state is ambiguous."
-            return $result
+            $toleranceSeconds = 30
+            $isLockstep = $false
+
+            if ($null -ne $priorObservedTime) {
+                $elapsedSeconds = ($CurrentTime - $priorObservedTime).TotalSeconds
+                $epochDeltaSeconds = [double]($resetEpoch - $priorResetEpoch)
+
+                if ($elapsedSeconds -gt 0 -and $epochDeltaSeconds -gt 0) {
+                    $driftSeconds = [Math]::Abs($epochDeltaSeconds - $elapsedSeconds)
+                    if ($driftSeconds -le $toleranceSeconds) {
+                        $isLockstep = $true
+                    }
+                }
+            }
+
+            if ($isLockstep) {
+                $result.FiveHourWindowStatus = "INACTIVE"
+                $result.CanEvaluateWarmup = $true
+                $result.Reason = "Uninitialized sliding anchor confirmed by successive probes advancing in lockstep with wall clock. Window is inactive."
+                return $result
+            } else {
+                $result.FiveHourWindowStatus = "AMBIGUOUS"
+                $result.CanEvaluateWarmup = $false
+                if ($null -eq $priorObservedTime) {
+                    $result.Reason = "Reset anchor changed from prior probe ($priorResetEpoch -> $resetEpoch) but prior probe lacks observation timestamp. Ambiguous until confirmed."
+                } else {
+                    $result.Reason = "Reset anchor changed ($priorResetEpoch -> $resetEpoch) but movement does not match elapsed wall time ($([Math]::Round($elapsedSeconds))s elapsed vs $([Math]::Round($epochDeltaSeconds))s reset delta). Quota state is ambiguous."
+                }
+                return $result
+            }
         } elseif ($null -eq $priorResetEpoch) {
             $result.ResetAnchorStatus = "SLIDING_OR_UNINITIALIZED"
             $result.FiveHourWindowStatus = "AMBIGUOUS"

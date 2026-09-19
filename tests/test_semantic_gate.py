@@ -382,11 +382,11 @@ class TestSemanticGate(unittest.TestCase):
         """
         Proves:
         profile_input = "CALIBRATED" (without bands)
-        -> fail-closed to UNKNOWN
-        -> NO_ACTION, DEMAND_UNKNOWN
+        -> fail-closed to DEMAND_INVALID
+        -> NO_ACTION, DEMAND_INVALID
         """
         engine = DecisionEngine({"demandProfile": "CALIBRATED"})
-        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_status, "DEMAND_INVALID")
         self.assertEqual(engine.demand_bands, [])
         state = {
             "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
@@ -396,17 +396,17 @@ class TestSemanticGate(unittest.TestCase):
         }
         plan = engine.plan_next_action(state)
         self.assertEqual(plan["decision"], "NO_ACTION")
-        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+        self.assertEqual(plan["baselineType"], "DEMAND_INVALID")
 
     def test_calibrated_empty_bands_fails_closed(self):
         """
         Proves:
         {"status": "CALIBRATED", "bands": []}
-        -> fail-closed to UNKNOWN
-        -> NO_ACTION, DEMAND_UNKNOWN
+        -> fail-closed to DEMAND_INVALID
+        -> NO_ACTION, DEMAND_INVALID
         """
         engine = DecisionEngine({"demandProfile": {"status": "CALIBRATED", "bands": []}})
-        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_status, "DEMAND_INVALID")
         self.assertEqual(engine.demand_bands, [])
         state = {
             "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
@@ -416,15 +416,15 @@ class TestSemanticGate(unittest.TestCase):
         }
         plan = engine.plan_next_action(state)
         self.assertEqual(plan["decision"], "NO_ACTION")
-        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+        self.assertEqual(plan["baselineType"], "DEMAND_INVALID")
 
     def test_calibrated_malformed_band_fails_closed_no_exception(self):
         """
         Proves:
         {"status": "CALIBRATED", "bands": [{"start": "15:00"}]} (missing end and demand)
         or negative demand, or invalid HH:MM
-        -> fail-closed to UNKNOWN without raising an exception
-        -> NO_ACTION, DEMAND_UNKNOWN
+        -> fail-closed to DEMAND_INVALID without raising an exception
+        -> NO_ACTION, DEMAND_INVALID
         """
         malformed_inputs = [
             {"status": "CALIBRATED", "bands": [{"start": "15:00"}]},
@@ -436,7 +436,7 @@ class TestSemanticGate(unittest.TestCase):
         ]
         for bad_prof in malformed_inputs:
             engine = DecisionEngine({"demandProfile": bad_prof})
-            self.assertEqual(engine.demand_status, "UNKNOWN")
+            self.assertEqual(engine.demand_status, "DEMAND_INVALID")
             self.assertEqual(engine.demand_bands, [])
             state = {
                 "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
@@ -446,17 +446,17 @@ class TestSemanticGate(unittest.TestCase):
             }
             plan = engine.plan_next_action(state)
             self.assertEqual(plan["decision"], "NO_ACTION")
-            self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+            self.assertEqual(plan["baselineType"], "DEMAND_INVALID")
 
     def test_legacy_malformed_direct_list_fails_closed(self):
         """
         Proves:
         Legacy direct list with malformed band:
-        -> fail-closed to UNKNOWN
-        -> NO_ACTION, DEMAND_UNKNOWN
+        -> fail-closed to DEMAND_INVALID
+        -> NO_ACTION, DEMAND_INVALID
         """
         engine = DecisionEngine({"demandProfile": [{"start": "invalid"}]})
-        self.assertEqual(engine.demand_status, "UNKNOWN")
+        self.assertEqual(engine.demand_status, "DEMAND_INVALID")
         self.assertEqual(engine.demand_bands, [])
         state = {
             "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
@@ -466,7 +466,7 @@ class TestSemanticGate(unittest.TestCase):
         }
         plan = engine.plan_next_action(state)
         self.assertEqual(plan["decision"], "NO_ACTION")
-        self.assertEqual(plan["baselineType"], "DEMAND_UNKNOWN")
+        self.assertEqual(plan["baselineType"], "DEMAND_INVALID")
 
     def test_unknown_and_no_demand_ignore_accidental_bands(self):
         """

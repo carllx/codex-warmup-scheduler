@@ -143,20 +143,32 @@ class DecisionEngine:
         return valid
 
     def parse_demand_profile(self, profile_input):
-        if isinstance(profile_input, str) and profile_input.upper() == "NO_DEMAND":
-            return "NO_DEMAND", []
+        if profile_input is None:
+            return "UNKNOWN", []
+        if isinstance(profile_input, str):
+            val = profile_input.strip().upper()
+            if val == "NO_DEMAND":
+                return "NO_DEMAND", []
+            if val in ("UNKNOWN", ""):
+                return "UNKNOWN", []
+            return "DEMAND_INVALID", []
         if isinstance(profile_input, dict):
-            status = str(profile_input.get("status", "UNKNOWN")).upper()
+            status_val = profile_input.get("status")
+            if status_val is None and not profile_input:
+                return "UNKNOWN", []
+            status = str(status_val or "UNKNOWN").upper()
             if status == "NO_DEMAND":
                 return "NO_DEMAND", []
+            if status == "UNKNOWN":
+                return "UNKNOWN", []
             if status == "CALIBRATED":
                 valid = self._validate_demand_bands(profile_input.get("bands"))
-                return ("CALIBRATED", valid) if valid else ("UNKNOWN", [])
-            return "UNKNOWN", []
+                return ("CALIBRATED", valid) if valid else ("DEMAND_INVALID", [])
+            return "DEMAND_INVALID", []
         if isinstance(profile_input, list):
             valid = self._validate_demand_bands(profile_input)
-            return ("CALIBRATED", valid) if valid else ("UNKNOWN", [])
-        return "UNKNOWN", []
+            return ("CALIBRATED", valid) if valid else ("DEMAND_INVALID", [])
+        return "DEMAND_INVALID", []
 
     def parse_time(self, t_str):
         if isinstance(t_str, datetime):
@@ -344,7 +356,9 @@ class DecisionEngine:
         curr_weight = self.get_time_weight(now, profile)
 
         # Invariant: baselineUtility must always equal NO_WARMUP trajectory served demand when demand exists
-        if demand_status == "UNKNOWN":
+        if demand_status == "DEMAND_INVALID":
+            b_type, b_util = "DEMAND_INVALID", 0.0
+        elif demand_status == "UNKNOWN":
             b_type, b_util = "DEMAND_UNKNOWN", 0.0
         elif demand_status == "NO_DEMAND":
             b_type, b_util = "NO_EXPECTED_WORK", 0.0
@@ -499,6 +513,15 @@ class DecisionEngine:
 
         readiness_pol = self._get_readiness_policy(state)
         inc_thresh = self.min_incremental_benefit
+
+        if demand_status == "DEMAND_INVALID":
+            return {
+                "decision": "NO_ACTION", "baselineType": "DEMAND_INVALID",
+                "baselineUtility": 0.0, "candidateUtility": 0.0, "incrementalBenefit": 0.0,
+                "incrementalThreshold": inc_thresh, "score": 0.0,
+                "reason": "Demand profile configuration is malformed or invalid; fail-closed prohibits scheduling warmup",
+                "breakdown": None, "topCandidates": []
+            }
 
         if demand_status == "UNKNOWN" and readiness_pol is None:
             return {
