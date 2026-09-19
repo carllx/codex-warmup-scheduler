@@ -65,14 +65,24 @@ function Invoke-BoundedProcess {
         # Allow brief bounded wait for process to disappear
         $proc.WaitForExit(1000) | Out-Null
 
+        # Bounded wait to drain any remaining partial streams from the terminated child
+        try {
+            [System.Threading.Tasks.Task]::WaitAll(@($outTask, $errTask), 1000) | Out-Null
+        } catch {}
+
         $endTime = Get-Date
         $durationSec = [Math]::Round(($endTime - $startTime).TotalSeconds, 2)
+
+        $stdoutText = if ($outTask.IsCompleted) { $outTask.Result.Trim() } else { "" }
+        $capturedErr = if ($errTask.IsCompleted) { $errTask.Result.Trim() } else { "" }
+        $timeoutMsg = "Process '$FilePath' exceeded hard timeout of $TimeoutSeconds seconds and was terminated."
+        $stderrText = if ($capturedErr) { "$capturedErr`n$timeoutMsg" } else { $timeoutMsg }
 
         return [PSCustomObject]@{
             Success     = $false
             ExitCode    = -1
-            Stdout      = if ($outTask.IsCompleted) { $outTask.Result.Trim() } else { "" }
-            Stderr      = "Process '$FilePath' exceeded hard timeout of $TimeoutSeconds seconds and was terminated."
+            Stdout      = $stdoutText
+            Stderr      = $stderrText
             TimedOut    = $true
             DurationSec = $durationSec
         }
