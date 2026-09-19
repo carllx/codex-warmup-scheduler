@@ -202,7 +202,7 @@ function ConvertTo-NormalizedQuotaState {
     if (($fiveHourWindow.usedPercent -eq 0 -or $null -eq $fiveHourWindow.usedPercent) -and ($deltaMinutes -ge 295)) {
         if ($null -ne $priorResetEpoch -and $resetEpoch -ne $priorResetEpoch) {
             $result.ResetAnchorStatus = "SLIDING_OR_UNINITIALIZED"
-            $toleranceSeconds = 30
+            $toleranceSeconds = 5
             $isLockstep = $false
 
             if ($null -ne $priorObservedTime) {

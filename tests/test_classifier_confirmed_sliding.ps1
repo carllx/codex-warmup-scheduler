@@ -98,13 +98,13 @@ try {
     Assert-Check ($res2a.CanEvaluateWarmup -eq $true) "C2.3: Exact lockstep CanEvaluateWarmup is true" "Got: $($res2a.CanEvaluateWarmup)"
     Assert-Check ($res2a.Reason -match "confirmed by successive probes") "C2.4: Reason explicitly states confirmed by successive probes" "Got: $($res2a.Reason)"
 
-    # Probe with small jitter within 30s tolerance (elapsed 600s, epoch delta 608s -> drift 8s)
-    $r1_jitter = [long]($r0 + 608)
+    # Probe with small jitter within 5s tolerance (elapsed 600s, epoch delta 602s -> drift 2s)
+    $r1_jitter = [long]($r0 + 602)
     $payload2b = New-RateLimitPayload -resetsAt $r1_jitter -usedPercent 0
     $res2b = ConvertTo-NormalizedQuotaState -RateLimitResponse $payload2b -CurrentTime $t1 -PreviousProbe $prevProbeExact
 
-    Assert-Check ($res2b.FiveHourWindowStatus -eq "INACTIVE") "C2.5: Jittered lockstep (8s drift) status is INACTIVE" "Got: $($res2b.FiveHourWindowStatus)"
-    Assert-Check ($res2b.CanEvaluateWarmup -eq $true) "C2.6: Jittered lockstep CanEvaluateWarmup is true" "Got: $($res2b.CanEvaluateWarmup)"
+    Assert-Check ($res2b.FiveHourWindowStatus -eq "INACTIVE") "C2.5: Small jittered lockstep (2s drift) status is INACTIVE" "Got: $($res2b.FiveHourWindowStatus)"
+    Assert-Check ($res2b.CanEvaluateWarmup -eq $true) "C2.6: Small jittered lockstep CanEvaluateWarmup is true" "Got: $($res2b.CanEvaluateWarmup)"
 } catch {
     Assert-Check $false "C2 Exception" $_
 }
@@ -150,6 +150,27 @@ try {
     $payload3c = New-RateLimitPayload -resetsAt ([long]($t0.ToUnixTimeSeconds() + 18400)) -usedPercent 0
     $res3c = ConvertTo-NormalizedQuotaState -RateLimitResponse $payload3c -CurrentTime $t1 -PreviousProbe $prevSkewed
     Assert-Check ($res3c.FiveHourWindowStatus -eq "AMBIGUOUS" -and $res3c.CanEvaluateWarmup -eq $false) "C3.7: Backward epoch movement fails closed to AMBIGUOUS" ""
+
+    # Case 3d: Real provider post-warmup transition counterexample
+    # Previous sliding observation:
+    # Timestamp = 2026-09-19T18:06:45.3858447+08:00, ResetEpoch = 1789830405
+    # First observation after successful warmup:
+    # CurrentTime = 2026-09-19T18:07:35.4452660+08:00, ResetEpoch = 1789830432
+    # Elapsed ~50.06s, Reset movement = 27s, Drift ~23.06s (> 5s tolerance)
+    # Must fail closed to AMBIGUOUS / false (not falsely classified as confirmed sliding)
+    $realPrevTime = [DateTimeOffset]::Parse("2026-09-19T18:06:45.3858447+08:00")
+    $realCurrentTime = [DateTimeOffset]::Parse("2026-09-19T18:07:35.4452660+08:00")
+    $prevRealWarmup = [PSCustomObject]@{
+        Timestamp  = $realPrevTime.ToString("o")
+        ResetEpoch = 1789830405
+        Status     = "AMBIGUOUS"
+    }
+    $payloadReal = New-RateLimitPayload -resetsAt 1789830432 -usedPercent 0
+    $resReal = ConvertTo-NormalizedQuotaState -RateLimitResponse $payloadReal -CurrentTime $realCurrentTime -PreviousProbe $prevRealWarmup
+
+    Assert-Check ($resReal.ResetAnchorStatus -eq "SLIDING_OR_UNINITIALIZED") "C3.8: Real transition anchor is SLIDING_OR_UNINITIALIZED" "Got: $($resReal.ResetAnchorStatus)"
+    Assert-Check ($resReal.FiveHourWindowStatus -eq "AMBIGUOUS") "C3.9: Real transition fails closed to AMBIGUOUS (23s drift > 5s tolerance)" "Got: $($resReal.FiveHourWindowStatus)"
+    Assert-Check ($resReal.CanEvaluateWarmup -eq $false) "C3.10: Real transition CanEvaluateWarmup is false" "Got: $($resReal.CanEvaluateWarmup)"
 } catch {
     Assert-Check $false "C3 Exception" $_
 }
