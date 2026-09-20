@@ -1,4 +1,4 @@
-﻿# ScheduledTrigger.psm1
+# ScheduledTrigger.psm1
 # Declaration-only module managing Windows Scheduled Task triggers for Codex Warmup V2
 # Exports: Update-ScheduledTrigger
 
@@ -30,20 +30,25 @@ function Update-ScheduledTrigger {
     }
 
     Write-Host "Updating scheduled triggers for task '$TaskName'..."
-    Write-Host "  Target Wakeup: $(if ($TargetDateTime) { $TargetDateTime.ToString('yyyy-MM-dd HH:mm:ss') } else { 'NONE (AtLogOn only)' })"
+    Write-Host "  Target Wakeup: $(if ($TargetDateTime) { $TargetDateTime.ToString('yyyy-MM-dd HH:mm:ss') } else { 'NONE' })"
     Write-Host "  DryRun: $($DryRun.IsPresent), ShadowMode: $($ShadowMode.IsPresent)"
 
     # Construct triggers:
-    # 1. Dynamic one-shot TimeTrigger
+    # Dynamic one-shot TimeTrigger.
+    # Note on AtLogOn removal under Limited execution:
+    # Under standard/Limited user execution context (non-elevated), Windows Task Scheduler rejects AtLogOn triggers:
+    # 1. An unscoped AtLogOn trigger requires administrator privileges to monitor all logons, throwing 'Access is denied'.
+    # 2. An owner-scoped AtLogOn trigger without full domain/SID qualification fails COM parameter validation.
+    # Dynamic self-update therefore relies on one-shot TimeTrigger + StartWhenAvailable = $true as the recovery mechanism.
+    # When StartWhenAvailable is enabled, if a scheduled execution is missed (e.g. machine asleep, powered down, or logged off),
+    # Task Scheduler automatically runs the task immediately upon logon or system wake.
     $triggers = @()
     if ($TargetDateTime) {
         $oneShotTrigger = New-ScheduledTaskTrigger -Once -At $TargetDateTime
         $triggers += $oneShotTrigger
+    } else {
+        throw "TargetDateTime is required for dynamic one-shot trigger."
     }
-
-    # 2. AtLogOn recovery trigger
-    $logonTrigger = New-ScheduledTaskTrigger -AtLogOn
-    $triggers += $logonTrigger
 
     # Configure settings strictly according to user rules:
     # WakeToRun = true, StartWhenAvailable = true, MultipleInstances = IgnoreNew
@@ -60,8 +65,6 @@ function Update-ScheduledTrigger {
         foreach ($trig in $triggers) {
             if ($trig.StartBoundary) {
                 Write-Host "  - Dynamic TimeTrigger: StartBoundary=$($trig.StartBoundary)"
-            } else {
-                Write-Host "  - Recovery Trigger: AtLogOn"
             }
         }
         Write-Host "[DryRun/ShadowMode] Settings: WakeToRun=$($settings.WakeToRun), StartWhenAvailable=$($settings.StartWhenAvailable), MultipleInstances=$($settings.MultipleInstances)"
