@@ -315,5 +315,71 @@ class TestReadinessPolicy(unittest.TestCase):
             if os.path.exists(temp_cfg_path):
                 os.remove(temp_cfg_path)
 
+    def test_readiness_immediate_boundary_does_not_starve_to_tomorrow(self):
+        """
+        Production regression:
+        At now = 2026-09-21T06:00:07+08:00 (7 seconds past nominal 06:00 boundary):
+        - Quota is INACTIVE / sliding uninitialized (resetsAt = 11:00:07).
+        - demandProfile = UNKNOWN.
+        - readinessPolicy: enabled=True, primaryUseStart="09:00", preferredReset="11:00".
+        Candidate 2026-09-21 06:00 yields resetAdvanceMinutes ≈ 179.9m.
+        Candidate 2026-09-22 06:00 yields resetAdvanceMinutes = 180.0m.
+        Because 2026-09-21 06:00 is an immediate opportunity (<= now + 5 min),
+        and has a far higher totalScore (immediate bonus, no 24h temporal discount),
+        it must win over tomorrow's 180.0m candidate and decide WARMUP_NOW,
+        rather than being starved into SCHEDULE_WARMUP for tomorrow.
+        """
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-21T06:00:07+08:00",
+            "quota": {
+                "resetAt": "2026-09-21T11:00:07+08:00",
+                "weeklyBlocked": False,
+                "fiveHourWindowStatus": "INACTIVE",
+                "windowDurationMinutes": 300
+            },
+            "demandProfile": {"status": "UNKNOWN", "bands": []},
+            "readinessPolicy": {
+                "enabled": True,
+                "primaryUseStart": "09:00",
+                "preferredReset": "11:00"
+            }
+        }
+        plan = self.engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "WARMUP_NOW")
+        self.assertEqual(plan["decisionReason"], "READINESS_BENEFIT")
+        self.assertEqual(plan["scheduledTime"], "2026-09-21 06:00")
+        self.assertEqual(plan["expectedBoundary"], "2026-09-21 11:00")
+        self.assertAlmostEqual(plan["resetAdvanceMinutes"], 179.9, places=1)
+
+    def test_readiness_future_candidate_returns_schedule_warmup(self):
+        """
+        Boundary verification:
+        Proves that when the viable readiness candidate is genuinely non-immediate
+        (e.g., at now = 2026-09-21T05:30:00+08:00, 30 minutes before 06:00),
+        it returns SCHEDULE_WARMUP (not WARMUP_NOW).
+        """
+        state = {
+            "device": {"wakeToRunAvailable": True, "state": "AWAKE"},
+            "now": "2026-09-21T05:30:00+08:00",
+            "quota": {
+                "resetAt": "2026-09-21T10:30:00+08:00",
+                "weeklyBlocked": False,
+                "fiveHourWindowStatus": "INACTIVE",
+                "windowDurationMinutes": 300
+            },
+            "demandProfile": {"status": "UNKNOWN", "bands": []},
+            "readinessPolicy": {
+                "enabled": True,
+                "primaryUseStart": "09:00",
+                "preferredReset": "11:00"
+            }
+        }
+        plan = self.engine.plan_next_action(state)
+        self.assertEqual(plan["decision"], "SCHEDULE_WARMUP")
+        self.assertEqual(plan["decisionReason"], "READINESS_BENEFIT")
+        self.assertEqual(plan["scheduledTime"], "2026-09-21 06:00")
+        self.assertEqual(plan["expectedBoundary"], "2026-09-21 11:00")
+
 if __name__ == "__main__":
     unittest.main()

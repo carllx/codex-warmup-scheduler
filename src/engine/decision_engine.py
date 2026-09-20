@@ -578,7 +578,7 @@ class DecisionEngine:
             qualifies = 1 if (x["hasCapacityWin"] or x["hasReadinessWin"]) else 0
             cap_b = x["incrementalBenefit"] if x["hasCapacityWin"] else 0.0
             read_b = x["resetAdvanceMinutes"] if x["hasReadinessWin"] else 0.0
-            return (qualifies, cap_b, read_b, x["totalScore"])
+            return (qualifies, cap_b, x["totalScore"], read_b)
 
         scored.sort(key=sort_key, reverse=True)
 
