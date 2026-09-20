@@ -23,6 +23,7 @@ foreach ($dir in @($RuntimeTarget, $ConfigTarget, $BackupTarget)) {
 # Deploy runtime files
 $filesToDeploy = @(
     "src\runtime\Resolve-CodexRuntime.ps1",
+    "src\runtime\Resolve-PythonRuntime.ps1",
     "src\runtime\Get-CodexRateLimits.ps1",
     "src\runtime\CodexWarmup.psm1",
     "src\runtime\WarmupNotification.psm1",

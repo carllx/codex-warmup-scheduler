@@ -82,6 +82,16 @@ try {
     }
     Log-Message "Codex Runtime resolved: $($runtime.path) (version: $($runtime.version), source: $($runtime.source))"
 
+    # 1b. Resolve Python Runtime (required for Decision Engine with dateutil)
+    . (Join-Path $RuntimeDir "Resolve-PythonRuntime.ps1")
+    $pythonRuntime = Resolve-PythonExecutable
+    if (-not $pythonRuntime.validated) {
+        Log-Message "Failed to resolve valid Python runtime (requires python with dateutil): $($pythonRuntime.source)" "ERROR"
+        exit 1
+    }
+    Log-Message "Python Runtime resolved: $($pythonRuntime.path) (version: $($pythonRuntime.version), source: $($pythonRuntime.source))"
+
+
     # Function to query and classify rate limits
     function Get-ClassifiedQuotaState {
         param([string]$CacheFile)
@@ -105,7 +115,12 @@ try {
         Import-Module (Join-Path $RuntimeDir "RateLimitClassifier.psm1") -Force
         $prevProbe = $null
         if ($CacheFile -and (Test-Path $CacheFile)) {
-            try { $prevProbe = Get-Content $CacheFile -Raw | ConvertFrom-Json } catch {}
+            try {
+                $prevProbe = Get-Content $CacheFile -Raw | ConvertFrom-Json
+                if ($prevProbe.Timestamp -is [System.DateTime]) {
+                    $prevProbe.Timestamp = $prevProbe.Timestamp.ToString("o")
+                }
+            } catch {}
         }
         $classification = ConvertTo-NormalizedQuotaState `
             -RateLimitResponse $rateLimitJson `
@@ -196,9 +211,9 @@ try {
         $engineArgs += "--weekly-exhausted"
     }
 
-    Log-Message "Invoking Decision Engine: python $($engineArgs -join ' ')"
+    Log-Message "Invoking Decision Engine: $($pythonRuntime.path) $($engineArgs -join ' ')"
 
-    $engineRes = Invoke-BoundedProcess -FilePath "python" -Arguments ($engineArgs -join " ") -TimeoutSeconds 15
+    $engineRes = Invoke-BoundedProcess -FilePath $pythonRuntime.path -Arguments ($engineArgs -join " ") -TimeoutSeconds 15
 
     if (-not $engineRes.Success -or $engineRes.ExitCode -ne 0) {
         Log-Message "Decision Engine failed or timed out (ExitCode=$($engineRes.ExitCode), TimedOut=$($engineRes.TimedOut)): $($engineRes.Stderr)" "ERROR"
@@ -212,6 +227,7 @@ try {
     $currentState = [PSCustomObject]@{
         timestamp      = $nowIso
         runtime        = $runtime
+        pythonRuntime  = $pythonRuntime
         classification = $cls
         decision       = $decision
         shadowMode     = $ShadowMode.IsPresent
@@ -262,7 +278,7 @@ try {
             if ($postCls.ResetAt) { $postEngineArgs += @("--active-until", "`"$($postCls.ResetAt)`"") }
             if ($postCls.WeeklyBlocked) { $postEngineArgs += "--weekly-exhausted" }
 
-            $postEngineRes = Invoke-BoundedProcess -FilePath "python" -Arguments ($postEngineArgs -join " ") -TimeoutSeconds 15
+            $postEngineRes = Invoke-BoundedProcess -FilePath $pythonRuntime.path -Arguments ($postEngineArgs -join " ") -TimeoutSeconds 15
             if (-not $postEngineRes.Success -or $postEngineRes.ExitCode -ne 0) {
                 Log-Message "Post-warmup Decision Engine failed or timed out: $($postEngineRes.Stderr)" "ERROR"
                 exit 4
